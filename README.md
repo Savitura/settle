@@ -48,6 +48,8 @@ Edit `.env` with your credentials:
 
 ```bash
 # Required: Get your Privy App ID from https://dashboard.privy.io
+# Note: For SMS/phone login, enable Phone authentication in Privy Dashboard
+#       (Settings → Login Methods → Phone). Email login works by default.
 NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id-here
 
 # Monad Testnet (defaults provided, override if needed)
@@ -83,11 +85,26 @@ npm run start      # Start production server (after build)
 ```
 src/
 ├── app/
-│   ├── globals.css    # Tailwind + global styles
-│   ├── layout.tsx     # Root layout
-│   └── page.tsx       # Main page with Privy auth + app shell
+│   ├── api/
+│   │   └── groups/        # Group wallet API routes
+│   │       ├── route.ts       # GET (list) + POST (create)
+│   │       ├── [id]/route.ts  # GET (single) + POST (actions)
+│   │       └── join/route.ts  # GET (lookup) + POST (join)
+│   ├── join/
+│   │   └── page.tsx       # Join group via invite link
+│   ├── globals.css        # Tailwind + global styles
+│   ├── layout.tsx         # Root layout
+│   └── page.tsx           # Main page with Privy auth + app shell
+├── components/
+│   ├── CreateGroupModal.tsx   # Create family wallet modal
+│   ├── GroupCard.tsx          # Group card in list view
+│   ├── GroupDetail.tsx        # Group detail with members
+│   ├── InviteModal.tsx        # Share invite code/link
+│   └── JoinGroupModal.tsx     # Join with invite code
 └── lib/
-    └── monad.ts       # Monad testnet chain definition
+    ├── db.ts              # Local storage persistence
+    ├── monad.ts           # Monad testnet chain definition
+    └── types.ts           # TypeScript types
 ```
 
 ## Current Status
@@ -97,9 +114,17 @@ src/
 - Embedded wallet creation on login
 - Monad testnet chain configuration
 - Login gate for unauthenticated users
-- App shell with Home and Groups tabs (placeholder UI)
+- App shell with Home and Groups tabs
 
-**Next**: Issue #2 — Shared group wallet creation
+**Issue #2 Complete**: Shared group wallets with:
+- Create family wallet (2–3 members max)
+- Invite flow with shareable 6-character code and link
+- Group and per-member USDC balance display
+- Join group via invite code or link (`/join?code=XXXXXX`)
+- Persistent membership (localStorage for MVP)
+- Mock balance seeding for demo purposes
+
+**Next**: Issue #3 — Send USDC remittance UX
 
 ## License
 
