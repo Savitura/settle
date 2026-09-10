@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { usePrivy, PrivyProvider } from "@privy-io/react-auth";
 
+import { getGroupsByWallet, getGroupById } from "@/lib/db";
 import { monadTestnet } from "@/lib/monad";
 import { Group } from "@/lib/types";
 import { CreateGroupModal } from "@/components/CreateGroupModal";
@@ -141,7 +142,6 @@ function AppShell({
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
 
   const walletAddress = user?.wallet?.address || "";
   const userEmail = user?.email?.address;
@@ -151,26 +151,15 @@ function AppShell({
     ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
     : null;
 
-  const fetchGroups = useCallback(async () => {
+  const loadGroups = useCallback(() => {
     if (!walletAddress) return;
-
-    setIsLoadingGroups(true);
-    try {
-      const response = await fetch(`/api/groups?wallet=${walletAddress}`);
-      if (response.ok) {
-        const data = await response.json();
-        setGroups(data.groups);
-      }
-    } catch (err) {
-      console.error("Failed to fetch groups:", err);
-    } finally {
-      setIsLoadingGroups(false);
-    }
+    const userGroups = getGroupsByWallet(walletAddress);
+    setGroups(userGroups);
   }, [walletAddress]);
 
   useEffect(() => {
-    fetchGroups();
-  }, [fetchGroups]);
+    loadGroups();
+  }, [loadGroups]);
 
   const handleGroupCreated = (group: Group) => {
     setGroups((prev) => [...prev, group]);
@@ -178,24 +167,19 @@ function AppShell({
   };
 
   const handleGroupJoined = (group: Group) => {
-    fetchGroups();
+    loadGroups();
     setSelectedGroup(group);
   };
 
-  const handleRefreshGroup = async () => {
+  const handleRefreshGroup = () => {
     if (!selectedGroup) return;
 
-    try {
-      const response = await fetch(`/api/groups/${selectedGroup.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedGroup(data.group);
-        setGroups((prev) =>
-          prev.map((g) => (g.id === data.group.id ? data.group : g))
-        );
-      }
-    } catch (err) {
-      console.error("Failed to refresh group:", err);
+    const refreshed = getGroupById(selectedGroup.id);
+    if (refreshed) {
+      setSelectedGroup(refreshed);
+      setGroups((prev) =>
+        prev.map((g) => (g.id === refreshed.id ? refreshed : g))
+      );
     }
   };
 
@@ -246,7 +230,6 @@ function AppShell({
               ) : (
                 <GroupsView
                   groups={groups}
-                  isLoading={isLoadingGroups}
                   onCreateGroup={() => setShowCreateModal(true)}
                   onJoinGroup={() => setShowJoinModal(true)}
                   onSelectGroup={setSelectedGroup}
@@ -391,14 +374,12 @@ function HomeView({
 
 function GroupsView({
   groups,
-  isLoading,
   onCreateGroup,
   onJoinGroup,
   onSelectGroup,
   currentUserWallet,
 }: {
   groups: Group[];
-  isLoading: boolean;
   onCreateGroup: () => void;
   onJoinGroup: () => void;
   onSelectGroup: (group: Group) => void;
@@ -424,11 +405,7 @@ function GroupsView({
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="py-12 text-center">
-          <div className="animate-pulse text-gray-500">Loading groups...</div>
-        </div>
-      ) : groups.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
             <svg

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { seedMockBalances } from "@/lib/db";
 import { Group } from "@/lib/types";
 import { InviteModal } from "./InviteModal";
 
@@ -19,23 +20,13 @@ export function GroupDetail({
   currentUserWallet,
 }: GroupDetailProps) {
   const [showInvite, setShowInvite] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   const isCreator =
     group.createdBy.toLowerCase() === currentUserWallet.toLowerCase();
 
-  const handleSeedBalances = async () => {
-    setIsSeeding(true);
-    try {
-      await fetch(`/api/groups/${group.id}?action=seed-balances`, {
-        method: "POST",
-      });
-      onRefresh();
-    } catch (err) {
-      console.error("Failed to seed balances:", err);
-    } finally {
-      setIsSeeding(false);
-    }
+  const handleSeedBalances = () => {
+    seedMockBalances(group.id);
+    onRefresh();
   };
 
   return (
@@ -188,10 +179,9 @@ export function GroupDetail({
           </p>
           <button
             onClick={handleSeedBalances}
-            disabled={isSeeding}
-            className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
           >
-            {isSeeding ? "Seeding..." : "Seed Mock Balances"}
+            Seed Mock Balances
           </button>
         </div>
       )}

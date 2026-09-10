@@ -85,11 +85,6 @@ npm run start      # Start production server (after build)
 ```
 src/
 ├── app/
-│   ├── api/
-│   │   └── groups/        # Group wallet API routes
-│   │       ├── route.ts       # GET (list) + POST (create)
-│   │       ├── [id]/route.ts  # GET (single) + POST (actions)
-│   │       └── join/route.ts  # GET (lookup) + POST (join)
 │   ├── join/
 │   │   └── page.tsx       # Join group via invite link
 │   ├── globals.css        # Tailwind + global styles
@@ -102,7 +97,7 @@ src/
 │   ├── InviteModal.tsx        # Share invite code/link
 │   └── JoinGroupModal.tsx     # Join with invite code
 └── lib/
-    ├── db.ts              # Local storage persistence
+    ├── db.ts              # Client-side localStorage persistence
     ├── monad.ts           # Monad testnet chain definition
     └── types.ts           # TypeScript types
 ```
@@ -121,7 +116,7 @@ src/
 - Invite flow with shareable 6-character code and link
 - Group and per-member USDC balance display
 - Join group via invite code or link (`/join?code=XXXXXX`)
-- Persistent membership (localStorage for MVP)
+- Client-side localStorage persistence (works across page reloads within same browser)
 - Mock balance seeding for demo purposes
 
 **Next**: Issue #3 — Send USDC remittance UX

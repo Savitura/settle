@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { createGroup } from "@/lib/db";
 import { Group } from "@/lib/types";
 
 interface CreateGroupModalProps {
@@ -22,41 +23,32 @@ export function CreateGroupModal({
   userPhone,
 }: CreateGroupModalProps) {
   const [name, setName] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsLoading(true);
 
     try {
-      const response = await fetch("/api/groups", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          creatorWalletAddress: walletAddress,
-          creatorEmail: userEmail,
-          creatorPhone: userPhone,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to create group");
+      if (!name.trim()) {
+        throw new Error("Group name is required");
       }
 
-      const { group } = await response.json();
+      const group = createGroup(
+        name.trim(),
+        walletAddress,
+        undefined,
+        userEmail,
+        userPhone
+      );
+
       onCreated(group);
       setName("");
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -127,10 +119,10 @@ export function CreateGroupModal({
             </button>
             <button
               type="submit"
-              disabled={isLoading || !name.trim()}
+              disabled={!name.trim()}
               className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isLoading ? "Creating..." : "Create Wallet"}
+              Create Wallet
             </button>
           </div>
         </form>

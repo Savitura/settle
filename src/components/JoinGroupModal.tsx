@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { getGroupByInviteCode, joinGroup } from "@/lib/db";
 import { Group } from "@/lib/types";
 
 interface JoinGroupModalProps {
@@ -24,7 +25,6 @@ export function JoinGroupModal({
   initialCode = "",
 }: JoinGroupModalProps) {
   const [code, setCode] = useState(initialCode);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [groupPreview, setGroupPreview] = useState<{
     name: string;
@@ -33,58 +33,46 @@ export function JoinGroupModal({
 
   if (!isOpen) return null;
 
-  const handleLookup = async () => {
+  const handleLookup = () => {
     if (!code.trim()) return;
     setError(null);
-    setIsLoading(true);
 
-    try {
-      const response = await fetch(`/api/groups/join?code=${code.trim()}`);
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Invalid invite code");
-      }
-
-      const { group } = await response.json();
-      setGroupPreview(group);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+    const group = getGroupByInviteCode(code.trim());
+    if (!group) {
+      setError("Invalid invite code");
       setGroupPreview(null);
-    } finally {
-      setIsLoading(false);
+      return;
     }
+
+    setGroupPreview({
+      name: group.name,
+      memberCount: group.members.length,
+    });
   };
 
-  const handleJoin = async () => {
+  const handleJoin = () => {
     setError(null);
-    setIsLoading(true);
 
     try {
-      const response = await fetch("/api/groups/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inviteCode: code.trim(),
-          walletAddress,
-          email: userEmail,
-          phone: userPhone,
-        }),
-      });
+      const group = joinGroup(
+        code.trim(),
+        walletAddress,
+        undefined,
+        userEmail,
+        userPhone
+      );
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to join group");
+      if (!group) {
+        setError("Invalid invite code");
+        return;
       }
 
-      const { group } = await response.json();
       onJoined(group);
       setCode("");
       setGroupPreview(null);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -171,19 +159,18 @@ export function JoinGroupModal({
             <button
               type="button"
               onClick={handleJoin}
-              disabled={isLoading}
-              className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
             >
-              {isLoading ? "Joining..." : "Join Wallet"}
+              Join Wallet
             </button>
           ) : (
             <button
               type="button"
               onClick={handleLookup}
-              disabled={isLoading || code.length < 6}
+              disabled={code.length < 6}
               className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isLoading ? "Looking up..." : "Look Up"}
+              Look Up
             </button>
           )}
         </div>
