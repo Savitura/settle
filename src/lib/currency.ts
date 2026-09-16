@@ -1,4 +1,4 @@
-const MOCK_NGN_RATE = 1650;
+const MOCK_NGN_RATE = 1580;
 
 export function usdcToNgn(usdc: number): number {
   return usdc * MOCK_NGN_RATE;

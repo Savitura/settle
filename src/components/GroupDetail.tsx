@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { seedMockBalances, getTransactionsByGroup } from "@/lib/db";
 import { Group, Transaction } from "@/lib/types";
-import { formatNgn, usdcToNgn, getExplorerTxUrl } from "@/lib/currency";
+import { formatNgn, usdcToNgn } from "@/lib/currency";
 import { InviteModal } from "./InviteModal";
 import { SendMoneyModal } from "./SendMoneyModal";
 
@@ -72,18 +72,16 @@ export function GroupDetail({
 
       <div className="rounded-xl bg-gradient-to-br from-primary-600 to-primary-700 p-6 text-white shadow-lg">
         <p className="text-sm font-medium text-primary-100">Group Balance</p>
-        <p className="mt-1 text-3xl font-bold">{group.totalBalance.usdcFormatted}</p>
-        <p className="mt-1 text-sm text-primary-200">
-          ≈ {formatNgn(usdcToNgn(parseFloat(group.totalBalance.usdc)))}
+        <p className="mt-1 text-3xl font-bold">
+          {formatNgn(usdcToNgn(parseFloat(group.totalBalance.usdc)))}
         </p>
-        <p className="mt-1 text-xs text-primary-300">USDC on Monad Testnet</p>
 
         <div className="mt-4 flex items-center justify-between text-xs text-primary-200">
           <span>
             {group.members.length} member{group.members.length !== 1 ? "s" : ""}
           </span>
           <span className="rounded bg-primary-500/30 px-2 py-0.5">
-            {parseFloat(group.totalBalance.usdc) === 0 ? "Mock balances available" : ""}
+            {parseFloat(group.totalBalance.usdc) === 0 ? "Demo balances available" : ""}
           </span>
         </div>
       </div>
@@ -139,9 +137,8 @@ export function GroupDetail({
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-gray-900">
-                    {member.balance.usdcFormatted}
+                    {formatNgn(usdcToNgn(parseFloat(member.balance.usdc)))}
                   </p>
-                  <p className="text-xs text-gray-500">USDC</p>
                 </div>
               </div>
             );
@@ -194,11 +191,11 @@ export function GroupDetail({
         </div>
         {!canSend && (
           <p className="mt-3 text-center text-xs text-amber-600">
-            Seed balances below to enable Send Money
+            Add demo balance below to enable Send
           </p>
         )}
         <p className="mt-2 text-center text-xs text-gray-400">
-          Request and Settle Up coming in Issue #4
+          Request and Settle Up coming soon
         </p>
       </div>
 
@@ -206,15 +203,17 @@ export function GroupDetail({
         <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4">
           <p className="mb-2 text-sm font-medium text-amber-800">Demo Mode</p>
           <p className="mb-3 text-xs text-amber-700">
-            Since RPC balance fetching is not yet wired, you can seed mock USDC
-            balances for demo purposes.
+            Add demo balances to try sending money within your group.
           </p>
           <button
             onClick={handleSeedBalances}
             className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
           >
-            Seed Mock Balances
+            Add Demo Balance
           </button>
+          <p className="mt-2 text-center text-xs text-amber-600">
+            Demo uses test dollars under the hood.
+          </p>
         </div>
       )}
 
@@ -293,14 +292,6 @@ export function GroupDetail({
                       {isSender ? "-" : "+"}
                       {formatNgn(parseFloat(tx.amountNgn))}
                     </p>
-                    <a
-                      href={getExplorerTxUrl(tx.txHash)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary-600 hover:underline"
-                    >
-                      View tx
-                    </a>
                   </div>
                 </div>
               );
