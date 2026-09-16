@@ -110,8 +110,28 @@ export function isDemoLoaded(): boolean {
   return localStorage.getItem(DEMO_LOADED_KEY) === "true";
 }
 
-export function clearDemoData(): void {
+export async function checkDemoDataExists(walletAddress: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/demo?wallet=${encodeURIComponent(walletAddress)}`);
+    if (!response.ok) return false;
+    const data = await response.json();
+    return data.hasDemoGroups === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearDemoData(walletAddress: string): Promise<void> {
   if (typeof window === "undefined") return;
+
+  try {
+    await fetch(`/api/demo?wallet=${encodeURIComponent(walletAddress)}`, {
+      method: "DELETE",
+    });
+  } catch (error) {
+    console.error("Failed to clear demo data from server:", error);
+  }
+
   localStorage.removeItem(DEMO_LOADED_KEY);
 }
 
@@ -215,6 +235,11 @@ export async function loadDemoScenario(
   currentUserEmail?: string,
   currentUserPhone?: string
 ): Promise<{ group: Group; assignedMemberIndex: number }> {
+  const hasDemoData = await checkDemoDataExists(currentUserWallet);
+  if (hasDemoData) {
+    throw new Error("Demo data already exists. Reset first to load again.");
+  }
+
   const { group, transactions, requests } = buildDemoData(
     scenario,
     currentUserWallet,

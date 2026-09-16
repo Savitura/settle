@@ -16,6 +16,19 @@ function generateInviteCode(): string {
   return code;
 }
 
+async function generateUniqueInviteCode(db: ReturnType<typeof getDb>, maxRetries = 5): Promise<string> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const code = generateInviteCode();
+    const existing = await db.query.groups.findFirst({
+      where: sql`UPPER(${schema.groups.inviteCode}) = UPPER(${code})`,
+    });
+    if (!existing) {
+      return code;
+    }
+  }
+  throw new Error("Failed to generate unique invite code after multiple attempts");
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -167,7 +180,7 @@ export async function POST(request: NextRequest) {
     const db = getDb();
     const groupId = generateId();
     const memberId = generateId();
-    const inviteCode = generateInviteCode();
+    const inviteCode = await generateUniqueInviteCode(db);
     const now = new Date();
 
     await db.insert(schema.groups).values({
