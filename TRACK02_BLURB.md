@@ -1,6 +1,10 @@
 # Settle — Monad Metropolis Track 02 Submission
 
-> **One-liner**: Hide-crypto shared wallets so Lagos families can send, split, and settle up — no seed phrases, no "blockchain" in the UI.
+> **One-liner:** Shared family wallets for Nigeria remittance — send, request, and settle up in ₦. Crypto stays under the hood.
+
+**Short (registration / one-pager):** Settle is a consumer remittance UX for Nigerian families: one shared wallet, clear ₦ balances, Send money / Request / Settle up in everyday language. Built for Metropolis Track 02 (Consumer Products & Payments) on Monad — users never see chain jargon on the primary path. Demo: seed a Lagos family → fund → send → request → settle even.
+
+> *Settle is a hackathon codename only. Final consumer brand TBD.*
 
 ---
 
@@ -27,10 +31,13 @@ Users see Nigerian Naira (₦), not USDC. They tap "Send" and "Request", not "Tr
 
 ## Demo Features
 
+**Judges walkthrough path:** Login → Seed Lagos family → Send money → Request → Settle up → Optional cash-out demo
+
 - **One-Click Demo**: Load a realistic Lagos family scenario with pre-seeded balances and transactions
 - **Send & Request**: Full flows for in-group transfers
 - **Settle Up**: Pay pending requests with one tap
 - **Invite Members**: Share 6-character code or link
+- **Cash-Out Demo**: Toggle "Cash out to Naira" on send (mocked for demo)
 
 ## Tech Stack
 
@@ -54,4 +61,4 @@ Savitura — building fintech for emerging markets.
 
 ---
 
-*Settle is a hackathon codename. Final consumer brand TBD.*
+*Settle is a hackathon codename only. Final consumer brand TBD.*

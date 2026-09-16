@@ -1,8 +1,16 @@
-# Settle — Shared Family Wallets for Africa
+# Settle — Shared Family Wallets for Nigeria Remittance
 
-> **Hide-crypto UX**: No blockchain jargon in the user flow. Families send money, split expenses, and settle up — without ever seeing "USDC", "Monad", or "seed phrases".
+> **One-liner:** Shared family wallets for Nigeria remittance — send, request, and settle up in ₦. Crypto stays under the hood.
 
 Monad Metropolis · **Track 02 — Consumer Products & Payments** · deadline **13 Oct 2026**
+
+---
+
+## Registration Blurb
+
+Settle is a consumer remittance UX for Nigerian families: one shared wallet, clear ₦ balances, Send money / Request / Settle up in everyday language. Built for Metropolis Track 02 (Consumer Products & Payments) on Monad — users never see chain jargon on the primary path. Demo: seed a Lagos family → fund → send → request → settle even.
+
+> *Settle is a hackathon codename only. Final consumer brand TBD.*
 
 ---
 
@@ -14,7 +22,9 @@ Monad Metropolis · **Track 02 — Consumer Products & Payments** · deadline **
 
 ## 5-Minute Walkthrough
 
-This walkthrough demonstrates how judges (or anyone) can explore the core features in under 5 minutes.
+**Judges path:** Login → Seed Lagos family → Send money → Request → Settle up → Optional cash-out demo
+
+This walkthrough demonstrates how judges (or anyone) can explore the core features in under 5 minutes. Hide-crypto stays on the primary UI throughout.
 
 ### Step 1: Sign In (30 seconds)
 
