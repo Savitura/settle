@@ -11,6 +11,7 @@ import { CreateGroupModal } from "@/components/CreateGroupModal";
 import { JoinGroupModal } from "@/components/JoinGroupModal";
 import { GroupCard } from "@/components/GroupCard";
 import { GroupDetail } from "@/components/GroupDetail";
+import { DemoBanner } from "@/components/DemoBanner";
 
 export default function Home() {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
@@ -171,6 +172,17 @@ function AppShell({
     setSelectedGroup(group);
   };
 
+  const handleDemoLoaded = (group: Group) => {
+    loadGroups();
+    setSelectedGroup(group);
+    setActiveTab("groups");
+  };
+
+  const handleDemoCleared = () => {
+    setGroups([]);
+    setSelectedGroup(null);
+  };
+
   const handleRefreshGroup = () => {
     if (!selectedGroup) return;
 
@@ -216,6 +228,11 @@ function AppShell({
               totalBalance={totalBalance}
               groupCount={groups.length}
               onGoToGroups={() => setActiveTab("groups")}
+              walletAddress={walletAddress}
+              userEmail={userEmail}
+              userPhone={userPhone}
+              onDemoLoaded={handleDemoLoaded}
+              onDemoCleared={handleDemoCleared}
             />
           )}
           {activeTab === "groups" && (
@@ -307,16 +324,36 @@ function HomeView({
   totalBalance,
   groupCount,
   onGoToGroups,
+  walletAddress,
+  userEmail,
+  userPhone,
+  onDemoLoaded,
+  onDemoCleared,
 }: {
   totalBalance: number;
   groupCount: number;
   onGoToGroups: () => void;
+  walletAddress: string;
+  userEmail?: string;
+  userPhone?: string;
+  onDemoLoaded: (group: Group) => void;
+  onDemoCleared: () => void;
 }) {
   const ngnRate = 1580;
   const ngnBalance = totalBalance * ngnRate;
 
   return (
     <div className="space-y-6">
+      {groupCount === 0 && (
+        <DemoBanner
+          walletAddress={walletAddress}
+          userEmail={userEmail}
+          userPhone={userPhone}
+          onDemoLoaded={onDemoLoaded}
+          onDemoCleared={onDemoCleared}
+        />
+      )}
+
       <div className="rounded-xl bg-gradient-to-br from-primary-600 to-primary-700 p-6 text-white shadow-lg">
         <p className="text-sm font-medium text-primary-100">Total Balance</p>
         <p className="mt-1 text-3xl font-bold">
