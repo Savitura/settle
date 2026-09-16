@@ -1,7 +1,16 @@
-import { Group, GroupMember, Transaction, CreateTransactionRequest } from "./types";
+import {
+  Group,
+  GroupMember,
+  Transaction,
+  CreateTransactionRequest,
+  MoneyRequest,
+  CreateMoneyRequestInput,
+  MoneyRequestStatus,
+} from "./types";
 
 const GROUPS_STORAGE_KEY = "settle_groups";
 const TRANSACTIONS_STORAGE_KEY = "settle_transactions";
+const REQUESTS_STORAGE_KEY = "settle_requests";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -294,4 +303,106 @@ export function getTransactionsByWallet(walletAddress: string): Transaction[] {
 export function getTransactionByHash(txHash: string): Transaction | null {
   const transactions = getTransactions();
   return transactions.find((t) => t.txHash === txHash) || null;
+}
+
+function getRequests(): MoneyRequest[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const stored = localStorage.getItem(REQUESTS_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRequests(requests: MoneyRequest[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  localStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(requests));
+}
+
+export function createMoneyRequest(input: CreateMoneyRequestInput): MoneyRequest {
+  const requests = getRequests();
+
+  const request: MoneyRequest = {
+    id: generateId(),
+    groupId: input.groupId,
+    fromAddress: input.fromAddress,
+    toAddress: input.toAddress,
+    amountUsdc: input.amountUsdc,
+    amountNgn: input.amountNgn,
+    note: input.note,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+
+  requests.push(request);
+  saveRequests(requests);
+  return request;
+}
+
+export function getRequestsByGroup(groupId: string): MoneyRequest[] {
+  const requests = getRequests();
+  return requests
+    .filter((r) => r.groupId === groupId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function getRequestsByWallet(walletAddress: string): MoneyRequest[] {
+  const requests = getRequests();
+  const addr = walletAddress.toLowerCase();
+  return requests
+    .filter(
+      (r) =>
+        r.fromAddress.toLowerCase() === addr ||
+        r.toAddress.toLowerCase() === addr
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function getPendingRequestsForWallet(
+  groupId: string,
+  walletAddress: string
+): MoneyRequest[] {
+  const requests = getRequests();
+  const addr = walletAddress.toLowerCase();
+  return requests
+    .filter(
+      (r) =>
+        r.groupId === groupId &&
+        r.status === "pending" &&
+        r.toAddress.toLowerCase() === addr
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function getRequestById(requestId: string): MoneyRequest | null {
+  const requests = getRequests();
+  return requests.find((r) => r.id === requestId) || null;
+}
+
+export function updateRequestStatus(
+  requestId: string,
+  status: MoneyRequestStatus,
+  settledTxId?: string
+): MoneyRequest | null {
+  const requests = getRequests();
+  const index = requests.findIndex((r) => r.id === requestId);
+
+  if (index === -1) {
+    return null;
+  }
+
+  requests[index].status = status;
+
+  if (status === "paid" && settledTxId) {
+    requests[index].settledAt = new Date().toISOString();
+    requests[index].settledTxId = settledTxId;
+  }
+
+  saveRequests(requests);
+  return requests[index];
 }

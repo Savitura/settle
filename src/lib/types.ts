@@ -56,6 +56,31 @@ export interface InviteLink {
 export type TransactionType = "send" | "receive" | "request" | "settle";
 export type TransactionStatus = "pending" | "confirmed" | "failed";
 
+export type MoneyRequestStatus = "pending" | "paid" | "declined" | "cancelled";
+
+export interface MoneyRequest {
+  id: string;
+  groupId: string;
+  fromAddress: string;
+  toAddress: string;
+  amountUsdc: string;
+  amountNgn: string;
+  note?: string;
+  status: MoneyRequestStatus;
+  createdAt: string;
+  settledAt?: string;
+  settledTxId?: string;
+}
+
+export interface CreateMoneyRequestInput {
+  groupId: string;
+  fromAddress: string;
+  toAddress: string;
+  amountUsdc: string;
+  amountNgn: string;
+  note?: string;
+}
+
 export interface Transaction {
   id: string;
   groupId: string;
