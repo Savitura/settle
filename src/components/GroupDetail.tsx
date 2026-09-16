@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import {
   seedMockBalances,
@@ -32,15 +32,28 @@ export function GroupDetail({
   const [showSendMoney, setShowSendMoney] = useState(false);
   const [showRequestMoney, setShowRequestMoney] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<MoneyRequest | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>(() =>
-    getTransactionsByGroup(group.id)
-  );
-  const [requests, setRequests] = useState<MoneyRequest[]>(() =>
-    getRequestsByGroup(group.id)
-  );
-  const [pendingRequests, setPendingRequests] = useState<MoneyRequest[]>(() =>
-    getPendingRequestsForWallet(group.id, currentUserWallet)
-  );
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [requests, setRequests] = useState<MoneyRequest[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<MoneyRequest[]>([]);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [txs, reqs, pending] = await Promise.all([
+        getTransactionsByGroup(group.id),
+        getRequestsByGroup(group.id),
+        getPendingRequestsForWallet(group.id, currentUserWallet),
+      ]);
+      setTransactions(txs);
+      setRequests(reqs);
+      setPendingRequests(pending);
+    } catch (error) {
+      console.error("Failed to load group data:", error);
+    }
+  }, [group.id, currentUserWallet]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const isCreator =
     group.createdBy.toLowerCase() === currentUserWallet.toLowerCase();
@@ -51,28 +64,42 @@ export function GroupDetail({
   const currentBalance = parseFloat(currentMember?.balance.usdc || "0");
   const canSend = currentBalance > 0;
 
-  const handleSeedBalances = () => {
-    seedMockBalances(group.id);
+  const handleSeedBalances = async () => {
+    await seedMockBalances(group.id);
     onRefresh();
   };
 
-  const handleSendSuccess = () => {
+  const handleSendSuccess = async () => {
     onRefresh();
-    setTransactions(getTransactionsByGroup(group.id));
-    setRequests(getRequestsByGroup(group.id));
-    setPendingRequests(getPendingRequestsForWallet(group.id, currentUserWallet));
+    const [txs, reqs, pending] = await Promise.all([
+      getTransactionsByGroup(group.id),
+      getRequestsByGroup(group.id),
+      getPendingRequestsForWallet(group.id, currentUserWallet),
+    ]);
+    setTransactions(txs);
+    setRequests(reqs);
+    setPendingRequests(pending);
   };
 
-  const handleRequestSuccess = () => {
-    setRequests(getRequestsByGroup(group.id));
-    setPendingRequests(getPendingRequestsForWallet(group.id, currentUserWallet));
+  const handleRequestSuccess = async () => {
+    const [reqs, pending] = await Promise.all([
+      getRequestsByGroup(group.id),
+      getPendingRequestsForWallet(group.id, currentUserWallet),
+    ]);
+    setRequests(reqs);
+    setPendingRequests(pending);
   };
 
-  const handleSettleSuccess = () => {
+  const handleSettleSuccess = async () => {
     onRefresh();
-    setTransactions(getTransactionsByGroup(group.id));
-    setRequests(getRequestsByGroup(group.id));
-    setPendingRequests(getPendingRequestsForWallet(group.id, currentUserWallet));
+    const [txs, reqs, pending] = await Promise.all([
+      getTransactionsByGroup(group.id),
+      getRequestsByGroup(group.id),
+      getPendingRequestsForWallet(group.id, currentUserWallet),
+    ]);
+    setTransactions(txs);
+    setRequests(reqs);
+    setPendingRequests(pending);
     setSelectedRequest(null);
   };
 

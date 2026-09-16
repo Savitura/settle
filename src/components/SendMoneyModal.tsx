@@ -94,7 +94,7 @@ export function SendMoneyModal({
       const txHash = generateMockTxHash();
       const recipientAddress = selectedMember?.walletAddress || "";
 
-      const newTx = createTransaction({
+      const newTx = await createTransaction({
         groupId: group.id,
         type: "send",
         fromAddress: currentUserWallet,
@@ -106,12 +106,12 @@ export function SendMoneyModal({
       });
 
       const newSenderBalance = (currentBalanceUsdc - usdcAmount).toFixed(6);
-      updateMemberBalance(group.id, currentUserWallet, newSenderBalance);
+      await updateMemberBalance(group.id, currentUserWallet, newSenderBalance);
 
       if (selectedMember) {
         const recipientBalance = parseFloat(selectedMember.balance.usdc || "0");
         const newRecipientBalance = (recipientBalance + usdcAmount).toFixed(6);
-        updateMemberBalance(group.id, selectedMember.walletAddress, newRecipientBalance);
+        await updateMemberBalance(group.id, selectedMember.walletAddress, newRecipientBalance);
       }
 
       setTransaction(newTx);

@@ -1,9 +1,6 @@
 import { Group, GroupMember, Transaction, MoneyRequest } from "./types";
 import { generateMockTxHash } from "./currency";
 
-const GROUPS_STORAGE_KEY = "settle_groups";
-const TRANSACTIONS_STORAGE_KEY = "settle_transactions";
-const REQUESTS_STORAGE_KEY = "settle_requests";
 const DEMO_LOADED_KEY = "settle_demo_loaded";
 
 function generateId(): string {
@@ -113,51 +110,26 @@ export function isDemoLoaded(): boolean {
   return localStorage.getItem(DEMO_LOADED_KEY) === "true";
 }
 
-export function clearDemoData(): void {
+export async function checkDemoDataExists(walletAddress: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/demo?wallet=${encodeURIComponent(walletAddress)}`);
+    if (!response.ok) return false;
+    const data = await response.json();
+    return data.hasDemoGroups === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearDemoData(walletAddress: string): Promise<void> {
   if (typeof window === "undefined") return;
 
   try {
-    const groupsStr = localStorage.getItem(GROUPS_STORAGE_KEY);
-    const txStr = localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
-    const reqStr = localStorage.getItem(REQUESTS_STORAGE_KEY);
-
-    if (groupsStr) {
-      const groups = JSON.parse(groupsStr) as { id: string }[];
-      const nonDemoGroups = groups.filter((g) => !g.id.startsWith("demo-"));
-      if (nonDemoGroups.length > 0) {
-        localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(nonDemoGroups));
-      } else {
-        localStorage.removeItem(GROUPS_STORAGE_KEY);
-      }
-
-      const demoGroupIds = new Set(
-        groups.filter((g) => g.id.startsWith("demo-")).map((g) => g.id)
-      );
-
-      if (txStr) {
-        const transactions = JSON.parse(txStr) as { groupId: string }[];
-        const nonDemoTx = transactions.filter((t) => !demoGroupIds.has(t.groupId));
-        if (nonDemoTx.length > 0) {
-          localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(nonDemoTx));
-        } else {
-          localStorage.removeItem(TRANSACTIONS_STORAGE_KEY);
-        }
-      }
-
-      if (reqStr) {
-        const requests = JSON.parse(reqStr) as { groupId: string }[];
-        const nonDemoReq = requests.filter((r) => !demoGroupIds.has(r.groupId));
-        if (nonDemoReq.length > 0) {
-          localStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(nonDemoReq));
-        } else {
-          localStorage.removeItem(REQUESTS_STORAGE_KEY);
-        }
-      }
-    }
-  } catch {
-    localStorage.removeItem(GROUPS_STORAGE_KEY);
-    localStorage.removeItem(TRANSACTIONS_STORAGE_KEY);
-    localStorage.removeItem(REQUESTS_STORAGE_KEY);
+    await fetch(`/api/demo?wallet=${encodeURIComponent(walletAddress)}`, {
+      method: "DELETE",
+    });
+  } catch (error) {
+    console.error("Failed to clear demo data from server:", error);
   }
 
   localStorage.removeItem(DEMO_LOADED_KEY);
@@ -172,12 +144,12 @@ function generateMockWalletAddress(): string {
   return address;
 }
 
-export function loadDemoScenario(
+function buildDemoData(
   scenario: DemoScenario,
   currentUserWallet: string,
   currentUserEmail?: string,
   currentUserPhone?: string
-): { group: Group; assignedMemberIndex: number } {
+): { group: Group; transactions: Transaction[]; requests: MoneyRequest[] } {
   const now = new Date();
 
   const walletAddresses = scenario.members.map((_, index) =>
@@ -254,14 +226,51 @@ export function loadDemoScenario(
     };
   });
 
-  if (typeof window !== "undefined") {
-    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify([group]));
-    localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
-    localStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(requests));
-    localStorage.setItem(DEMO_LOADED_KEY, "true");
+  return { group, transactions, requests };
+}
+
+export async function loadDemoScenario(
+  scenario: DemoScenario,
+  currentUserWallet: string,
+  currentUserEmail?: string,
+  currentUserPhone?: string
+): Promise<{ group: Group; assignedMemberIndex: number }> {
+  const hasDemoData = await checkDemoDataExists(currentUserWallet);
+  if (hasDemoData) {
+    throw new Error("Demo data already exists. Reset first to load again.");
   }
 
-  return { group, assignedMemberIndex: 0 };
+  const { group, transactions, requests } = buildDemoData(
+    scenario,
+    currentUserWallet,
+    currentUserEmail,
+    currentUserPhone
+  );
+
+  try {
+    const response = await fetch("/api/migrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        groups: [group],
+        transactions,
+        requests,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to load demo data");
+    }
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(DEMO_LOADED_KEY, "true");
+    }
+
+    return { group, assignedMemberIndex: 0 };
+  } catch (error) {
+    console.error("Failed to load demo scenario:", error);
+    throw error;
+  }
 }
 
 export function getDemoScenarios(): DemoScenario[] {

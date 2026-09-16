@@ -28,10 +28,10 @@ export function DemoBanner({
   const [loading, setLoading] = useState(false);
   const [demoActive, setDemoActive] = useState(() => isDemoLoaded());
 
-  const handleLoadDemo = () => {
+  const handleLoadDemo = async () => {
     setLoading(true);
     try {
-      const { group } = loadDemoScenario(
+      const { group } = await loadDemoScenario(
         LAGOS_FAMILY_SCENARIO,
         walletAddress,
         userEmail,
@@ -39,15 +39,24 @@ export function DemoBanner({
       );
       setDemoActive(true);
       onDemoLoaded(group);
+    } catch (error) {
+      console.error("Failed to load demo:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleClearDemo = () => {
-    clearDemoData();
-    setDemoActive(false);
-    onDemoCleared();
+  const handleClearDemo = async () => {
+    setLoading(true);
+    try {
+      await clearDemoData(walletAddress);
+      setDemoActive(false);
+      onDemoCleared();
+    } catch (error) {
+      console.error("Failed to clear demo:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (demoActive) {
@@ -64,9 +73,10 @@ export function DemoBanner({
           </div>
           <button
             onClick={handleClearDemo}
-            className="text-xs text-amber-600 underline hover:text-amber-800"
+            disabled={loading}
+            className="text-xs text-amber-600 underline hover:text-amber-800 disabled:opacity-50"
           >
-            Reset
+            {loading ? "Resetting..." : "Reset"}
           </button>
         </div>
       </div>

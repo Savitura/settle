@@ -33,11 +33,11 @@ export function JoinGroupModal({
 
   if (!isOpen) return null;
 
-  const handleLookup = () => {
+  const handleLookup = async () => {
     if (!code.trim()) return;
     setError(null);
 
-    const group = getGroupByInviteCode(code.trim());
+    const group = await getGroupByInviteCode(code.trim());
     if (!group) {
       setError("Invalid invite code");
       setGroupPreview(null);
@@ -50,11 +50,11 @@ export function JoinGroupModal({
     });
   };
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     setError(null);
 
     try {
-      const group = joinGroup(
+      const group = await joinGroup(
         code.trim(),
         walletAddress,
         undefined,

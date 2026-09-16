@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { usePrivy, PrivyProvider } from "@privy-io/react-auth";
 
-import { getGroupsByWallet, getGroupById } from "@/lib/db";
+import { getGroupsByWallet, getGroupById, migrateLocalStorageData } from "@/lib/db";
 import { monadTestnet } from "@/lib/monad";
 import { Group } from "@/lib/types";
 import { CreateGroupModal } from "@/components/CreateGroupModal";
@@ -152,14 +152,22 @@ function AppShell({
     ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
     : null;
 
-  const loadGroups = useCallback(() => {
+  const loadGroups = useCallback(async () => {
     if (!walletAddress) return;
-    const userGroups = getGroupsByWallet(walletAddress);
-    setGroups(userGroups);
+    try {
+      const userGroups = await getGroupsByWallet(walletAddress);
+      setGroups(userGroups);
+    } catch (error) {
+      console.error("Failed to load groups:", error);
+    }
   }, [walletAddress]);
 
   useEffect(() => {
-    loadGroups();
+    const initAndLoad = async () => {
+      await migrateLocalStorageData();
+      loadGroups();
+    };
+    initAndLoad();
   }, [loadGroups]);
 
   const handleGroupCreated = (group: Group) => {
@@ -183,10 +191,10 @@ function AppShell({
     setSelectedGroup(null);
   };
 
-  const handleRefreshGroup = () => {
+  const handleRefreshGroup = async () => {
     if (!selectedGroup) return;
 
-    const refreshed = getGroupById(selectedGroup.id);
+    const refreshed = await getGroupById(selectedGroup.id);
     if (refreshed) {
       setSelectedGroup(refreshed);
       setGroups((prev) =>

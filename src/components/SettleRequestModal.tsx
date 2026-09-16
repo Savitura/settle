@@ -66,7 +66,7 @@ export function SettleRequestModal({
 
       const txHash = generateMockTxHash();
 
-      const newTx = createTransaction({
+      const newTx = await createTransaction({
         groupId: group.id,
         type: "settle",
         fromAddress: currentUserWallet,
@@ -79,15 +79,15 @@ export function SettleRequestModal({
       });
 
       const newPayerBalance = (currentBalanceUsdc - requestAmountUsdc).toFixed(6);
-      updateMemberBalance(group.id, currentUserWallet, newPayerBalance);
+      await updateMemberBalance(group.id, currentUserWallet, newPayerBalance);
 
       if (requester) {
         const requesterBalance = parseFloat(requester.balance.usdc || "0");
         const newRequesterBalance = (requesterBalance + requestAmountUsdc).toFixed(6);
-        updateMemberBalance(group.id, requester.walletAddress, newRequesterBalance);
+        await updateMemberBalance(group.id, requester.walletAddress, newRequesterBalance);
       }
 
-      updateRequestStatus(request.id, "paid", newTx.id);
+      await updateRequestStatus(request.id, "paid", newTx.id);
 
       setTransaction(newTx);
       setStep("success");
@@ -97,8 +97,8 @@ export function SettleRequestModal({
     }
   };
 
-  const handleDecline = () => {
-    updateRequestStatus(request.id, "declined");
+  const handleDecline = async () => {
+    await updateRequestStatus(request.id, "declined");
     onSuccess();
     handleClose();
   };

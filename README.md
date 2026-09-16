@@ -117,16 +117,27 @@ cp .env.example .env
 
 ### Environment Variables
 
-Edit `.env` with your Privy App ID:
+Edit `.env` with your configuration:
 
 ```bash
 # Required: Get your Privy App ID from https://dashboard.privy.io
 NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id-here
 
+# Required: Neon Postgres connection string from https://console.neon.tech
+DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
+
 # Monad Testnet (defaults provided)
 NEXT_PUBLIC_MONAD_CHAIN_ID=10143
 NEXT_PUBLIC_MONAD_RPC_URL=https://testnet-rpc.monad.xyz
 NEXT_PUBLIC_MONAD_BLOCK_EXPLORER=https://testnet-explorer.monad.xyz
+```
+
+### Database Setup
+
+After setting `DATABASE_URL`, create the database tables:
+
+```bash
+npm run db:push
 ```
 
 > **Note**: For SMS/phone login, enable Phone authentication in your Privy Dashboard (Settings → Login Methods → Phone). Email login works by default.
@@ -178,6 +189,9 @@ In your Vercel project settings, add:
 | Variable | Value |
 |----------|-------|
 | `NEXT_PUBLIC_PRIVY_APP_ID` | Your Privy App ID |
+| `DATABASE_URL` | Neon Postgres connection string |
+
+> **Tip**: Create a Neon database at [console.neon.tech](https://console.neon.tech) and copy the connection string.
 
 ---
 
@@ -186,6 +200,12 @@ In your Vercel project settings, add:
 ```
 src/
 ├── app/
+│   ├── api/
+│   │   ├── demo/route.ts       # Demo data management
+│   │   ├── groups/             # Group CRUD + join + balance
+│   │   ├── migrate/route.ts    # localStorage migration
+│   │   ├── requests/route.ts   # Money requests
+│   │   └── transactions/route.ts
 │   ├── join/page.tsx       # Join group via invite link
 │   ├── globals.css         # Tailwind + global styles
 │   ├── layout.tsx          # Root layout
@@ -202,7 +222,10 @@ src/
 │   └── SettleRequestModal.tsx  # Pay pending request
 └── lib/
     ├── currency.ts         # NGN/USD conversion helpers
-    ├── db.ts               # localStorage persistence
+    ├── db.ts               # API client for persistence
+    ├── db/
+    │   ├── connection.ts   # Neon Postgres connection
+    │   └── schema.ts       # Drizzle ORM schema
     ├── demoData.ts         # Demo scenarios + seed data
     ├── monad.ts            # Chain configuration
     └── types.ts            # TypeScript types
@@ -250,10 +273,11 @@ npm run typecheck  # Run TypeScript type check
 
 ## Technical Notes
 
-- **Client-side localStorage**: Groups, transactions, and requests persist in browser storage (same browser/device). No backend server in this MVP.
+- **Neon Postgres persistence**: Groups, transactions, and requests persist in a shared Neon Postgres database via Next.js API routes. Data is accessible across devices/browsers.
 - **Hide-crypto UX**: All primary flows use Naira (₦) amounts. Crypto terminology only appears in footer disclaimers or demo mode labels.
 - **Demo rate**: ≈ $1 = ₦1,580 (static mock rate for demo purposes)
 - **Max 3 members**: Per MVP requirements, family wallets cap at 3 members.
+- **API authentication**: Write APIs are currently unauthenticated (wallet address passed from client). Production would require proper auth middleware.
 
 ---
 

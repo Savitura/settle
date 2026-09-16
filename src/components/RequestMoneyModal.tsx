@@ -69,20 +69,24 @@ export function RequestMoneyModal({
     setStep("confirm");
   };
 
-  const handleRequest = () => {
+  const handleRequest = async () => {
     const recipientAddress = selectedMember?.walletAddress || "";
 
-    const newRequest = createMoneyRequest({
-      groupId: group.id,
-      fromAddress: currentUserWallet,
-      toAddress: recipientAddress,
-      amountUsdc: usdcAmount.toFixed(6),
-      amountNgn: ngnAmount.toFixed(0),
-      note: note || undefined,
-    });
+    try {
+      const newRequest = await createMoneyRequest({
+        groupId: group.id,
+        fromAddress: currentUserWallet,
+        toAddress: recipientAddress,
+        amountUsdc: usdcAmount.toFixed(6),
+        amountNgn: ngnAmount.toFixed(0),
+        note: note || undefined,
+      });
 
-    setRequest(newRequest);
-    setStep("success");
+      setRequest(newRequest);
+      setStep("success");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    }
   };
 
   const handleClose = () => {
