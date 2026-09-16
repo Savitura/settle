@@ -196,8 +196,9 @@ function ConfirmStep({
 
       <div className="p-4">
         <div className="mb-6 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 p-6 text-center text-white">
-          <p className="text-sm font-medium text-amber-100">{requesterName} requested</p>
-          <p className="mt-2 text-4xl font-bold">{formatNgn(requestAmountNgn)}</p>
+          <p className="mt-2 text-lg font-medium">
+            {requesterName} owes you {formatNgn(requestAmountNgn)}
+          </p>
         </div>
 
         {note && (
@@ -226,7 +227,7 @@ function ConfirmStep({
             disabled={!hasEnoughBalance}
             className="w-full rounded-xl bg-primary-600 py-4 text-base font-semibold text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Pay {formatNgn(requestAmountNgn)}
+            Mark as paid
           </button>
           <button
             onClick={onDecline}
@@ -262,7 +263,6 @@ function SendingStep() {
 }
 
 function SuccessStep({
-  amountNgn,
   requesterName,
   onClose,
 }: {
@@ -278,16 +278,7 @@ function SuccessStep({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h3 className="text-xl font-semibold text-gray-900">Paid</h3>
-      </div>
-
-      <div className="mb-6 rounded-xl bg-gradient-to-br from-primary-50 to-green-50 p-5 text-center">
-        <p className="text-lg text-gray-900">
-          You paid {formatNgn(amountNgn)} to {requesterName}.
-        </p>
-        <p className="mt-2 text-sm text-gray-600">
-          All settled up!
-        </p>
+        <h3 className="text-xl font-semibold text-gray-900">Settled with {requesterName}</h3>
       </div>
 
       <button

@@ -197,7 +197,7 @@ function FormStep({
       <div className="space-y-5 p-4">
         <div>
           <label className="mb-2 block text-sm font-medium text-gray-700">
-            Amount (₦)
+            How much (₦)?
           </label>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-medium text-gray-400">
@@ -218,7 +218,7 @@ function FormStep({
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">Ask from</label>
+          <label className="mb-2 block text-sm font-medium text-gray-700">From</label>
 
           <div className="space-y-2">
             {otherMembers.length === 0 ? (
@@ -364,10 +364,7 @@ function SuccessStep({
 
       <div className="mb-6 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 p-5 text-center">
         <p className="text-lg text-gray-900">
-          Asked {recipientName} for {formatNgn(ngnAmount)}.
-        </p>
-        <p className="mt-2 text-sm text-gray-600">
-          They can pay whenever they&apos;re ready.
+          {recipientName} owes you {formatNgn(ngnAmount)}
         </p>
       </div>
 

@@ -243,6 +243,12 @@ export function GroupDetail({
             Add demo balance below to enable Send
           </p>
         )}
+        {pendingRequests.length === 0 && hasOtherMembers && (
+          <div className="mt-4 rounded-lg bg-green-50 p-3 text-center">
+            <p className="text-sm font-medium text-green-700">You&apos;re all even</p>
+            <p className="mt-0.5 text-xs text-green-600">No open balances in this group</p>
+          </div>
+        )}
       </div>
 
       {pendingRequests.length > 0 && (
