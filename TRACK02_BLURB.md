@@ -55,7 +55,7 @@ Savitura — building fintech for emerging markets.
 
 ## Links
 
-- **Live Demo**: [https://settle-gamma-seven.vercel.app](https://settle-gamma-seven.vercel.app)
+- **Live Demo**: [https://settlefinance.vercel.app](https://settlefinance.vercel.app)
 - **GitHub**: [github.com/Savitura/settle](https://github.com/Savitura/settle)
 - **Walkthrough**: See README.md for 5-minute guided tour
 
