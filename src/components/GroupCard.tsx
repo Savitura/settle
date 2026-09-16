@@ -1,6 +1,7 @@
 "use client";
 
 import { Group } from "@/lib/types";
+import { formatNgn, usdcToNgn } from "@/lib/currency";
 
 interface GroupCardProps {
   group: Group;
@@ -29,13 +30,13 @@ export function GroupCard({ group, onClick, currentUserWallet }: GroupCardProps)
         <div>
           <p className="text-xs text-gray-500">Group Total</p>
           <p className="text-lg font-semibold text-gray-900">
-            {group.totalBalance.usdcFormatted}
+            {formatNgn(usdcToNgn(parseFloat(group.totalBalance.usdc)))}
           </p>
         </div>
         <div>
           <p className="text-xs text-gray-500">Your Balance</p>
           <p className="text-lg font-semibold text-primary-600">
-            {currentMember?.balance.usdcFormatted || "$0.00"}
+            {formatNgn(usdcToNgn(parseFloat(currentMember?.balance.usdc || "0")))}
           </p>
         </div>
       </div>

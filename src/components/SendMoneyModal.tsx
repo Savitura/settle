@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 import { Group, GroupMember, Transaction } from "@/lib/types";
 import { createTransaction, updateMemberBalance } from "@/lib/db";
-import { generateMockTxHash, formatNgn, ngnToUsdc } from "@/lib/currency";
+import { generateMockTxHash, formatNgn } from "@/lib/currency";
 
 interface SendMoneyModalProps {
   isOpen: boolean;
