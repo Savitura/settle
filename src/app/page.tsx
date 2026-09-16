@@ -312,16 +312,15 @@ function HomeView({
   groupCount: number;
   onGoToGroups: () => void;
 }) {
-  const ngnRate = 1650;
+  const ngnRate = 1580;
   const ngnBalance = totalBalance * ngnRate;
 
   return (
     <div className="space-y-6">
       <div className="rounded-xl bg-gradient-to-br from-primary-600 to-primary-700 p-6 text-white shadow-lg">
         <p className="text-sm font-medium text-primary-100">Total Balance</p>
-        <p className="mt-1 text-3xl font-bold">${totalBalance.toFixed(2)}</p>
-        <p className="mt-1 text-sm text-primary-200">
-          ≈ ₦{ngnBalance.toLocaleString("en-NG", { maximumFractionDigits: 0 })}
+        <p className="mt-1 text-3xl font-bold">
+          ₦{ngnBalance.toLocaleString("en-NG", { maximumFractionDigits: 0 })}
         </p>
         {groupCount > 0 && (
           <p className="mt-2 text-xs text-primary-200">
@@ -336,10 +335,10 @@ function HomeView({
           <ActionButton label="Send" disabled />
           <ActionButton label="Request" disabled />
           <ActionButton label="Add Money" disabled />
-          <ActionButton label="Withdraw" disabled />
+          <ActionButton label="Cash Out" disabled />
         </div>
         <p className="mt-4 text-center text-xs text-gray-400">
-          Coming soon in Issues #3 and #4
+          Coming soon
         </p>
       </div>
 

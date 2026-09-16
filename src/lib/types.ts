@@ -52,3 +52,32 @@ export interface InviteLink {
   code: string;
   url: string;
 }
+
+export type TransactionType = "send" | "receive" | "request" | "settle";
+export type TransactionStatus = "pending" | "confirmed" | "failed";
+
+export interface Transaction {
+  id: string;
+  groupId: string;
+  type: TransactionType;
+  fromAddress: string;
+  toAddress: string;
+  amountUsdc: string;
+  amountNgn: string;
+  txHash: string;
+  status: TransactionStatus;
+  note?: string;
+  createdAt: string;
+}
+
+export interface CreateTransactionRequest {
+  groupId: string;
+  type: TransactionType;
+  fromAddress: string;
+  toAddress: string;
+  amountUsdc: string;
+  amountNgn: string;
+  txHash: string;
+  status: TransactionStatus;
+  note?: string;
+}

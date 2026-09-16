@@ -1,6 +1,7 @@
-import { Group, GroupMember } from "./types";
+import { Group, GroupMember, Transaction, CreateTransactionRequest } from "./types";
 
 const GROUPS_STORAGE_KEY = "settle_groups";
+const TRANSACTIONS_STORAGE_KEY = "settle_transactions";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -228,4 +229,69 @@ export function seedMockBalances(groupId: string): Group | null {
   groups[groupIndex] = group;
   saveGroups(groups);
   return group;
+}
+
+function getTransactions(): Transaction[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const stored = localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTransactions(transactions: Transaction[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
+}
+
+export function createTransaction(request: CreateTransactionRequest): Transaction {
+  const transactions = getTransactions();
+
+  const transaction: Transaction = {
+    id: generateId(),
+    groupId: request.groupId,
+    type: request.type,
+    fromAddress: request.fromAddress,
+    toAddress: request.toAddress,
+    amountUsdc: request.amountUsdc,
+    amountNgn: request.amountNgn,
+    txHash: request.txHash,
+    status: request.status,
+    note: request.note,
+    createdAt: new Date().toISOString(),
+  };
+
+  transactions.push(transaction);
+  saveTransactions(transactions);
+  return transaction;
+}
+
+export function getTransactionsByGroup(groupId: string): Transaction[] {
+  const transactions = getTransactions();
+  return transactions
+    .filter((t) => t.groupId === groupId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function getTransactionsByWallet(walletAddress: string): Transaction[] {
+  const transactions = getTransactions();
+  const addr = walletAddress.toLowerCase();
+  return transactions
+    .filter(
+      (t) =>
+        t.fromAddress.toLowerCase() === addr ||
+        t.toAddress.toLowerCase() === addr
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function getTransactionByHash(txHash: string): Transaction | null {
+  const transactions = getTransactions();
+  return transactions.find((t) => t.txHash === txHash) || null;
 }
