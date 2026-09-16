@@ -16,7 +16,7 @@ Settle is a consumer remittance UX for Nigerian families: one shared wallet, cle
 
 ## Live Demo
 
-**Deploy URL**: [https://settle-gamma-seven.vercel.app](https://settle-gamma-seven.vercel.app)
+**Deploy URL**: [https://settlefinance.vercel.app](https://settlefinance.vercel.app)
 
 ---
 
