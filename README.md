@@ -60,10 +60,9 @@ For the hackathon demo, we provide a one-click Lagos family scenario:
 1. Tap **Send Money** in Quick Actions
 2. Enter an amount (e.g., ₦15,000)
 3. Select a family member (e.g., Chidi)
-4. Optionally add a note ("For transport")
-5. Tap **Send**
-6. See the success screen: "₦15,000 is on the way to Chidi"
-7. Return to the group — balances update instantly
+4. Tap **Send**
+5. See the success screen: "₦15,000 is on the way to Chidi"
+6. Return to the group — balances update instantly
 
 ### Step 5: Request Money (1 minute)
 
@@ -76,11 +75,11 @@ For the hackathon demo, we provide a one-click Lagos family scenario:
 
 ### Step 6: Settle Up / Pay a Request (30 seconds)
 
-1. Notice the **Pending Requests** card shows outstanding requests
-2. Tap **Settle Up** or tap a pending request directly
+1. Notice the **Pending Requests** card shows Chidi's request for generator fuel
+2. Tap **Settle Up** or tap the pending request directly
 3. Review the request details
-4. Tap **Pay** to settle
-5. The request is marked as paid and balances adjust
+4. Tap **Mark as paid**
+5. The request is settled and balances adjust
 
 ### Step 7: Invite a Family Member (30 seconds)
 

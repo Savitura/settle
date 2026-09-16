@@ -92,8 +92,8 @@ export const LAGOS_FAMILY_SCENARIO: DemoScenario = {
   ],
   requests: [
     {
-      fromIndex: 0,
-      toIndex: 1,
+      fromIndex: 1,
+      toIndex: 0,
       amountUsdc: "40.00",
       note: "Generator fuel",
       status: "pending",
@@ -115,9 +115,51 @@ export function isDemoLoaded(): boolean {
 
 export function clearDemoData(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(GROUPS_STORAGE_KEY);
-  localStorage.removeItem(TRANSACTIONS_STORAGE_KEY);
-  localStorage.removeItem(REQUESTS_STORAGE_KEY);
+
+  try {
+    const groupsStr = localStorage.getItem(GROUPS_STORAGE_KEY);
+    const txStr = localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
+    const reqStr = localStorage.getItem(REQUESTS_STORAGE_KEY);
+
+    if (groupsStr) {
+      const groups = JSON.parse(groupsStr) as { id: string }[];
+      const nonDemoGroups = groups.filter((g) => !g.id.startsWith("demo-"));
+      if (nonDemoGroups.length > 0) {
+        localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(nonDemoGroups));
+      } else {
+        localStorage.removeItem(GROUPS_STORAGE_KEY);
+      }
+
+      const demoGroupIds = new Set(
+        groups.filter((g) => g.id.startsWith("demo-")).map((g) => g.id)
+      );
+
+      if (txStr) {
+        const transactions = JSON.parse(txStr) as { groupId: string }[];
+        const nonDemoTx = transactions.filter((t) => !demoGroupIds.has(t.groupId));
+        if (nonDemoTx.length > 0) {
+          localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(nonDemoTx));
+        } else {
+          localStorage.removeItem(TRANSACTIONS_STORAGE_KEY);
+        }
+      }
+
+      if (reqStr) {
+        const requests = JSON.parse(reqStr) as { groupId: string }[];
+        const nonDemoReq = requests.filter((r) => !demoGroupIds.has(r.groupId));
+        if (nonDemoReq.length > 0) {
+          localStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(nonDemoReq));
+        } else {
+          localStorage.removeItem(REQUESTS_STORAGE_KEY);
+        }
+      }
+    }
+  } catch {
+    localStorage.removeItem(GROUPS_STORAGE_KEY);
+    localStorage.removeItem(TRANSACTIONS_STORAGE_KEY);
+    localStorage.removeItem(REQUESTS_STORAGE_KEY);
+  }
+
   localStorage.removeItem(DEMO_LOADED_KEY);
 }
 
