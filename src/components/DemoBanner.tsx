@@ -28,10 +28,10 @@ export function DemoBanner({
   const [loading, setLoading] = useState(false);
   const [demoActive, setDemoActive] = useState(() => isDemoLoaded());
 
-  const handleLoadDemo = () => {
+  const handleLoadDemo = async () => {
     setLoading(true);
     try {
-      const { group } = loadDemoScenario(
+      const { group } = await loadDemoScenario(
         LAGOS_FAMILY_SCENARIO,
         walletAddress,
         userEmail,
@@ -39,6 +39,8 @@ export function DemoBanner({
       );
       setDemoActive(true);
       onDemoLoaded(group);
+    } catch (error) {
+      console.error("Failed to load demo:", error);
     } finally {
       setLoading(false);
     }

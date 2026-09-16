@@ -11,149 +11,147 @@ import {
 const GROUPS_STORAGE_KEY = "settle_groups";
 const TRANSACTIONS_STORAGE_KEY = "settle_transactions";
 const REQUESTS_STORAGE_KEY = "settle_requests";
+const MIGRATION_DONE_KEY = "settle_migration_done";
 
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-}
-
-function generateInviteCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+function getBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    return "";
   }
-  return code;
+  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
 
-function getGroups(): Group[] {
+async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const baseUrl = getBaseUrl();
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function migrateLocalStorageData(): Promise<{ migrated: boolean; imported?: { groups: number; members: number; transactions: number; requests: number } }> {
   if (typeof window === "undefined") {
-    return [];
+    return { migrated: false };
   }
+
+  if (localStorage.getItem(MIGRATION_DONE_KEY) === "true") {
+    return { migrated: false };
+  }
+
   try {
-    const stored = localStorage.getItem(GROUPS_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
+    const groupsStr = localStorage.getItem(GROUPS_STORAGE_KEY);
+    const transactionsStr = localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
+    const requestsStr = localStorage.getItem(REQUESTS_STORAGE_KEY);
+
+    const groups = groupsStr ? JSON.parse(groupsStr) : [];
+    const transactions = transactionsStr ? JSON.parse(transactionsStr) : [];
+    const requests = requestsStr ? JSON.parse(requestsStr) : [];
+
+    if (groups.length === 0 && transactions.length === 0 && requests.length === 0) {
+      localStorage.setItem(MIGRATION_DONE_KEY, "true");
+      return { migrated: false };
+    }
+
+    const result = await fetchApi<{ success: boolean; imported: { groups: number; members: number; transactions: number; requests: number } }>("/api/migrate", {
+      method: "POST",
+      body: JSON.stringify({ groups, transactions, requests }),
+    });
+
+    if (result.success) {
+      localStorage.setItem(MIGRATION_DONE_KEY, "true");
+      return { migrated: true, imported: result.imported };
+    }
+
+    return { migrated: false };
+  } catch (error) {
+    console.error("Migration failed:", error);
+    return { migrated: false };
   }
 }
 
-function saveGroups(groups: Group[]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups));
-}
-
-export function createGroup(
+export async function createGroup(
   name: string,
   creatorWalletAddress: string,
   creatorDisplayName?: string,
   creatorEmail?: string,
   creatorPhone?: string
-): Group {
-  const groups = getGroups();
-  const now = new Date().toISOString();
-
-  const creatorMember: GroupMember = {
-    id: generateId(),
-    walletAddress: creatorWalletAddress,
-    displayName: creatorDisplayName || null,
-    email: creatorEmail || null,
-    phone: creatorPhone || null,
-    joinedAt: now,
-    balance: {
-      usdc: "0",
-      usdcFormatted: "$0.00",
-    },
-  };
-
-  const group: Group = {
-    id: generateId(),
-    name,
-    createdAt: now,
-    createdBy: creatorWalletAddress,
-    inviteCode: generateInviteCode(),
-    members: [creatorMember],
-    totalBalance: {
-      usdc: "0",
-      usdcFormatted: "$0.00",
-    },
-  };
-
-  groups.push(group);
-  saveGroups(groups);
-  return group;
+): Promise<Group> {
+  const result = await fetchApi<{ group: Group }>("/api/groups", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      creatorWalletAddress,
+      creatorDisplayName,
+      creatorEmail,
+      creatorPhone,
+    }),
+  });
+  return result.group;
 }
 
-export function getGroupsByWallet(walletAddress: string): Group[] {
-  const groups = getGroups();
-  return groups.filter((g) =>
-    g.members.some(
-      (m) => m.walletAddress.toLowerCase() === walletAddress.toLowerCase()
-    )
+export async function getGroupsByWallet(walletAddress: string): Promise<Group[]> {
+  const result = await fetchApi<{ groups: Group[] }>(
+    `/api/groups?wallet=${encodeURIComponent(walletAddress)}`
   );
+  return result.groups;
 }
 
-export function getGroupById(groupId: string): Group | null {
-  const groups = getGroups();
-  return groups.find((g) => g.id === groupId) || null;
+export async function getGroupById(groupId: string): Promise<Group | null> {
+  try {
+    const result = await fetchApi<{ group: Group }>(
+      `/api/groups?id=${encodeURIComponent(groupId)}`
+    );
+    return result.group;
+  } catch {
+    return null;
+  }
 }
 
-export function getGroupByInviteCode(inviteCode: string): Group | null {
-  const groups = getGroups();
-  return (
-    groups.find((g) => g.inviteCode.toUpperCase() === inviteCode.toUpperCase()) ||
-    null
-  );
+export async function getGroupByInviteCode(inviteCode: string): Promise<Group | null> {
+  try {
+    const result = await fetchApi<{ group: Group }>(
+      `/api/groups?inviteCode=${encodeURIComponent(inviteCode)}`
+    );
+    return result.group;
+  } catch {
+    return null;
+  }
 }
 
-export function joinGroup(
+export async function joinGroup(
   inviteCode: string,
   walletAddress: string,
   displayName?: string,
   email?: string,
   phone?: string
-): Group | null {
-  const groups = getGroups();
-  const groupIndex = groups.findIndex(
-    (g) => g.inviteCode.toUpperCase() === inviteCode.toUpperCase()
-  );
-
-  if (groupIndex === -1) {
+): Promise<Group | null> {
+  try {
+    const result = await fetchApi<{ group: Group }>("/api/groups/join", {
+      method: "POST",
+      body: JSON.stringify({
+        inviteCode,
+        walletAddress,
+        displayName,
+        email,
+        phone,
+      }),
+    });
+    return result.group;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("full")) {
+      throw error;
+    }
     return null;
   }
-
-  const group = groups[groupIndex];
-
-  const alreadyMember = group.members.some(
-    (m) => m.walletAddress.toLowerCase() === walletAddress.toLowerCase()
-  );
-
-  if (alreadyMember) {
-    return group;
-  }
-
-  if (group.members.length >= 3) {
-    throw new Error("Group is full (maximum 3 members)");
-  }
-
-  const newMember: GroupMember = {
-    id: generateId(),
-    walletAddress,
-    displayName: displayName || null,
-    email: email || null,
-    phone: phone || null,
-    joinedAt: new Date().toISOString(),
-    balance: {
-      usdc: "0",
-      usdcFormatted: "$0.00",
-    },
-  };
-
-  group.members.push(newMember);
-  groups[groupIndex] = group;
-  saveGroups(groups);
-  return group;
 }
 
 export function getInviteUrl(inviteCode: string): string {
@@ -163,246 +161,125 @@ export function getInviteUrl(inviteCode: string): string {
   return `${window.location.origin}/join?code=${inviteCode}`;
 }
 
-export function updateMemberBalance(
+export async function updateMemberBalance(
   groupId: string,
   walletAddress: string,
   usdcBalance: string
-): Group | null {
-  const groups = getGroups();
-  const groupIndex = groups.findIndex((g) => g.id === groupId);
-
-  if (groupIndex === -1) {
+): Promise<Group | null> {
+  try {
+    const result = await fetchApi<{ group: Group }>("/api/groups/balance", {
+      method: "POST",
+      body: JSON.stringify({
+        groupId,
+        walletAddress,
+        usdcBalance,
+      }),
+    });
+    return result.group;
+  } catch {
     return null;
   }
-
-  const group = groups[groupIndex];
-  const memberIndex = group.members.findIndex(
-    (m) => m.walletAddress.toLowerCase() === walletAddress.toLowerCase()
-  );
-
-  if (memberIndex === -1) {
-    return null;
-  }
-
-  const usdcNum = parseFloat(usdcBalance) || 0;
-  group.members[memberIndex].balance = {
-    usdc: usdcBalance,
-    usdcFormatted: `$${usdcNum.toFixed(2)}`,
-  };
-
-  let totalUsdc = 0;
-  for (const member of group.members) {
-    totalUsdc += parseFloat(member.balance.usdc) || 0;
-  }
-
-  group.totalBalance = {
-    usdc: totalUsdc.toString(),
-    usdcFormatted: `$${totalUsdc.toFixed(2)}`,
-  };
-
-  groups[groupIndex] = group;
-  saveGroups(groups);
-  return group;
 }
 
-export function seedMockBalances(groupId: string): Group | null {
-  const groups = getGroups();
-  const groupIndex = groups.findIndex((g) => g.id === groupId);
-
-  if (groupIndex === -1) {
+export async function seedMockBalances(groupId: string): Promise<Group | null> {
+  try {
+    const result = await fetchApi<{ group: Group }>("/api/groups/balance", {
+      method: "POST",
+      body: JSON.stringify({
+        groupId,
+        seedMock: true,
+      }),
+    });
+    return result.group;
+  } catch {
     return null;
   }
+}
 
-  const group = groups[groupIndex];
-  const mockBalances = ["125.50", "78.25", "210.00"];
-
-  group.members.forEach((member, index) => {
-    const balance = mockBalances[index % mockBalances.length];
-    const usdcNum = parseFloat(balance);
-    member.balance = {
-      usdc: balance,
-      usdcFormatted: `$${usdcNum.toFixed(2)}`,
-    };
+export async function createTransaction(request: CreateTransactionRequest): Promise<Transaction> {
+  const result = await fetchApi<{ transaction: Transaction }>("/api/transactions", {
+    method: "POST",
+    body: JSON.stringify(request),
   });
-
-  let totalUsdc = 0;
-  for (const member of group.members) {
-    totalUsdc += parseFloat(member.balance.usdc) || 0;
-  }
-
-  group.totalBalance = {
-    usdc: totalUsdc.toString(),
-    usdcFormatted: `$${totalUsdc.toFixed(2)}`,
-  };
-
-  groups[groupIndex] = group;
-  saveGroups(groups);
-  return group;
+  return result.transaction;
 }
 
-function getTransactions(): Transaction[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-  try {
-    const stored = localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
+export async function getTransactionsByGroup(groupId: string): Promise<Transaction[]> {
+  const result = await fetchApi<{ transactions: Transaction[] }>(
+    `/api/transactions?groupId=${encodeURIComponent(groupId)}`
+  );
+  return result.transactions;
 }
 
-function saveTransactions(transactions: Transaction[]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
+export async function getTransactionsByWallet(walletAddress: string): Promise<Transaction[]> {
+  const result = await fetchApi<{ transactions: Transaction[] }>(
+    `/api/transactions?wallet=${encodeURIComponent(walletAddress)}`
+  );
+  return result.transactions;
 }
 
-export function createTransaction(request: CreateTransactionRequest): Transaction {
-  const transactions = getTransactions();
-
-  const transaction: Transaction = {
-    id: generateId(),
-    groupId: request.groupId,
-    type: request.type,
-    fromAddress: request.fromAddress,
-    toAddress: request.toAddress,
-    amountUsdc: request.amountUsdc,
-    amountNgn: request.amountNgn,
-    txHash: request.txHash,
-    status: request.status,
-    note: request.note,
-    createdAt: new Date().toISOString(),
-  };
-
-  transactions.push(transaction);
-  saveTransactions(transactions);
-  return transaction;
+export async function getTransactionByHash(txHash: string): Promise<Transaction | null> {
+  const result = await fetchApi<{ transaction: Transaction | null }>(
+    `/api/transactions?txHash=${encodeURIComponent(txHash)}`
+  );
+  return result.transaction;
 }
 
-export function getTransactionsByGroup(groupId: string): Transaction[] {
-  const transactions = getTransactions();
-  return transactions
-    .filter((t) => t.groupId === groupId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+export async function createMoneyRequest(input: CreateMoneyRequestInput): Promise<MoneyRequest> {
+  const result = await fetchApi<{ request: MoneyRequest }>("/api/requests", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return result.request;
 }
 
-export function getTransactionsByWallet(walletAddress: string): Transaction[] {
-  const transactions = getTransactions();
-  const addr = walletAddress.toLowerCase();
-  return transactions
-    .filter(
-      (t) =>
-        t.fromAddress.toLowerCase() === addr ||
-        t.toAddress.toLowerCase() === addr
-    )
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+export async function getRequestsByGroup(groupId: string): Promise<MoneyRequest[]> {
+  const result = await fetchApi<{ requests: MoneyRequest[] }>(
+    `/api/requests?groupId=${encodeURIComponent(groupId)}`
+  );
+  return result.requests;
 }
 
-export function getTransactionByHash(txHash: string): Transaction | null {
-  const transactions = getTransactions();
-  return transactions.find((t) => t.txHash === txHash) || null;
+export async function getRequestsByWallet(walletAddress: string): Promise<MoneyRequest[]> {
+  const result = await fetchApi<{ requests: MoneyRequest[] }>(
+    `/api/requests?wallet=${encodeURIComponent(walletAddress)}`
+  );
+  return result.requests;
 }
 
-function getRequests(): MoneyRequest[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-  try {
-    const stored = localStorage.getItem(REQUESTS_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveRequests(requests: MoneyRequest[]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  localStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(requests));
-}
-
-export function createMoneyRequest(input: CreateMoneyRequestInput): MoneyRequest {
-  const requests = getRequests();
-
-  const request: MoneyRequest = {
-    id: generateId(),
-    groupId: input.groupId,
-    fromAddress: input.fromAddress,
-    toAddress: input.toAddress,
-    amountUsdc: input.amountUsdc,
-    amountNgn: input.amountNgn,
-    note: input.note,
-    status: "pending",
-    createdAt: new Date().toISOString(),
-  };
-
-  requests.push(request);
-  saveRequests(requests);
-  return request;
-}
-
-export function getRequestsByGroup(groupId: string): MoneyRequest[] {
-  const requests = getRequests();
-  return requests
-    .filter((r) => r.groupId === groupId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-}
-
-export function getRequestsByWallet(walletAddress: string): MoneyRequest[] {
-  const requests = getRequests();
-  const addr = walletAddress.toLowerCase();
-  return requests
-    .filter(
-      (r) =>
-        r.fromAddress.toLowerCase() === addr ||
-        r.toAddress.toLowerCase() === addr
-    )
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-}
-
-export function getPendingRequestsForWallet(
+export async function getPendingRequestsForWallet(
   groupId: string,
   walletAddress: string
-): MoneyRequest[] {
-  const requests = getRequests();
-  const addr = walletAddress.toLowerCase();
-  return requests
-    .filter(
-      (r) =>
-        r.groupId === groupId &&
-        r.status === "pending" &&
-        r.toAddress.toLowerCase() === addr
-    )
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+): Promise<MoneyRequest[]> {
+  const result = await fetchApi<{ requests: MoneyRequest[] }>(
+    `/api/requests?groupId=${encodeURIComponent(groupId)}&wallet=${encodeURIComponent(walletAddress)}&pendingOnly=true`
+  );
+  return result.requests;
 }
 
-export function getRequestById(requestId: string): MoneyRequest | null {
-  const requests = getRequests();
-  return requests.find((r) => r.id === requestId) || null;
+export async function getRequestById(requestId: string): Promise<MoneyRequest | null> {
+  const result = await fetchApi<{ request: MoneyRequest | null }>(
+    `/api/requests?id=${encodeURIComponent(requestId)}`
+  );
+  return result.request;
 }
 
-export function updateRequestStatus(
+export async function updateRequestStatus(
   requestId: string,
   status: MoneyRequestStatus,
   settledTxId?: string
-): MoneyRequest | null {
-  const requests = getRequests();
-  const index = requests.findIndex((r) => r.id === requestId);
-
-  if (index === -1) {
+): Promise<MoneyRequest | null> {
+  try {
+    const result = await fetchApi<{ request: MoneyRequest | null }>("/api/requests", {
+      method: "PATCH",
+      body: JSON.stringify({
+        requestId,
+        status,
+        settledTxId,
+      }),
+    });
+    return result.request;
+  } catch {
     return null;
   }
-
-  requests[index].status = status;
-
-  if (status === "paid" && settledTxId) {
-    requests[index].settledAt = new Date().toISOString();
-    requests[index].settledTxId = settledTxId;
-  }
-
-  saveRequests(requests);
-  return requests[index];
 }

@@ -27,7 +27,7 @@ export function CreateGroupModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -36,7 +36,7 @@ export function CreateGroupModal({
         throw new Error("Group name is required");
       }
 
-      const group = createGroup(
+      const group = await createGroup(
         name.trim(),
         walletAddress,
         undefined,
