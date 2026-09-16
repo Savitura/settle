@@ -197,7 +197,7 @@ function ConfirmStep({
       <div className="p-4">
         <div className="mb-6 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 p-6 text-center text-white">
           <p className="mt-2 text-lg font-medium">
-            {requesterName} owes you {formatNgn(requestAmountNgn)}
+            You owe {requesterName} {formatNgn(requestAmountNgn)}
           </p>
         </div>
 

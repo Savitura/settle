@@ -243,6 +243,8 @@ export function GroupDetail({
             Add demo balance below to enable Send
           </p>
         )}
+        {/* TODO: "You're all even" currently only checks inbound pending requests (pendingRequests).
+            To be fully accurate, should also check outbound open requests the current user sent. */}
         {pendingRequests.length === 0 && hasOtherMembers && (
           <div className="mt-4 rounded-lg bg-green-50 p-3 text-center">
             <p className="text-sm font-medium text-green-700">You&apos;re all even</p>
