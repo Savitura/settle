@@ -15,17 +15,17 @@ const config: Config = {
       colors: {
         // Vivid "Naija green" — the brand colour, used for money-in and primary actions
         primary: {
-          50: "#ebfdf3",
-          100: "#d0fae3",
-          200: "#a4f3cb",
-          300: "#6be6ad",
-          400: "#32d08b",
-          500: "#0fb872",
-          600: "#04955c",
-          700: "#05774c",
-          800: "#085e3e",
-          900: "#084d35",
-          950: "#022b1d",
+          50: "#effff7",
+          100: "#d8ffea",
+          200: "#a9ffd1",
+          300: "#6fffb0",
+          400: "#20eb82",
+          500: "#00d66f",
+          600: "#00ad59",
+          700: "#078847",
+          800: "#096b3b",
+          900: "#075832",
+          950: "#042f1c",
         },
         // Warm sunset coral — requests and "someone is waiting on you"
         coral: {
@@ -49,16 +49,16 @@ const config: Config = {
           500: "#f9a806",
         },
         ink: {
-          DEFAULT: "#10201a",
-          soft: "#3c4b44",
-          muted: "#5f6d66",
+          DEFAULT: "#171915",
+          soft: "#3f433b",
+          muted: "#6f746a",
         },
-        cream: "#fbf8f1",
+        cream: "#f7f7e9",
       },
       boxShadow: {
-        glow: "0 18px 40px -16px rgba(4, 149, 92, 0.55)",
+        glow: "0 18px 40px -20px rgba(0, 173, 89, 0.45)",
         "glow-coral": "0 18px 40px -16px rgba(254, 74, 17, 0.5)",
-        card: "0 1px 2px rgba(16, 32, 26, 0.04), 0 8px 24px -12px rgba(16, 32, 26, 0.12)",
+        card: "0 1px 2px rgba(23, 25, 21, 0.04), 0 10px 30px -22px rgba(23, 25, 21, 0.22)",
       },
       keyframes: {
         "sheet-up": {

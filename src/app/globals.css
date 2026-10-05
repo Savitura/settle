@@ -8,6 +8,10 @@
   color-scheme: light;
 }
 
+html {
+  background: #f7f7e9;
+}
+
 body {
   @apply bg-cream font-sans text-ink antialiased;
   min-height: 100vh;
@@ -17,16 +21,16 @@ body {
 @layer components {
   /* Primary money action — big, bright, tactile */
   .btn-primary {
-    @apply inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-4 font-display text-base font-semibold text-white shadow-glow transition-all duration-150 hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-600 disabled:shadow-none disabled:active:scale-100;
+    @apply inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary-500 px-6 py-4 font-display text-base font-semibold text-ink shadow-glow active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600 disabled:shadow-none disabled:active:scale-100;
   }
   .btn-coral {
     @apply inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-coral-400 to-coral-500 px-6 py-4 font-display text-base font-semibold text-white shadow-glow-coral transition-all duration-150 hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-600 disabled:shadow-none;
   }
   .btn-ghost {
-    @apply inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-ink/10 bg-white px-6 py-3.5 text-sm font-semibold text-ink-soft transition-all duration-150 hover:bg-ink/[0.03] active:scale-[0.98];
+    @apply inline-flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-6 py-3.5 text-sm font-semibold text-ink-soft hover:bg-ink/[0.04] active:scale-[0.98];
   }
   .card {
-    @apply rounded-3xl bg-white p-5 shadow-card ring-1 ring-ink/5;
+    @apply rounded-[28px] bg-white p-5 shadow-card ring-1 ring-ink/10;
   }
   .eyebrow {
     @apply text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted;

@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
             email: m.email,
             phone: m.phone,
             joinedAt: m.joinedAt.toISOString(),
+            role: m.role,
             balance: {
               usdc: m.balanceUsdc,
               usdcFormatted: `$${parseFloat(m.balanceUsdc).toFixed(2)}`,
@@ -105,6 +106,7 @@ export async function GET(request: NextRequest) {
             email: m.email,
             phone: m.phone,
             joinedAt: m.joinedAt.toISOString(),
+            role: m.role,
             balance: {
               usdc: m.balanceUsdc,
               usdcFormatted: `$${parseFloat(m.balanceUsdc).toFixed(2)}`,
@@ -147,6 +149,7 @@ export async function GET(request: NextRequest) {
             email: m.email,
             phone: m.phone,
             joinedAt: m.joinedAt.toISOString(),
+            role: m.role,
             balance: {
               usdc: m.balanceUsdc,
               usdcFormatted: `$${parseFloat(m.balanceUsdc).toFixed(2)}`,
@@ -200,6 +203,7 @@ export async function POST(request: NextRequest) {
       phone: creatorPhone || null,
       joinedAt: now,
       balanceUsdc: "0",
+      role: "owner",
     });
 
     return NextResponse.json({

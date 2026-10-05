@@ -9,8 +9,10 @@ import {
   migrateLocalStorageData,
   getTransactionsByWallet,
   fundDemoWallet,
+  getNotifications,
+  markNotificationsRead,
 } from "@/lib/db";
-import { Group, Transaction } from "@/lib/types";
+import { Group, Transaction, Notification } from "@/lib/types";
 import { formatNgn, usdcToNgn } from "@/lib/currency";
 import { CreateGroupModal } from "./CreateGroupModal";
 import { JoinGroupModal } from "./JoinGroupModal";
@@ -49,7 +51,7 @@ function Logo({ size = "md" }: { size?: "md" | "lg" }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex items-center justify-center bg-gradient-to-br from-primary-400 via-primary-600 to-primary-800 font-display font-extrabold text-white shadow-glow ${box}`}
+      className={`inline-flex items-center justify-center bg-ink font-display font-extrabold text-primary-400 shadow-card ${box}`}
     >
       ₦
     </span>
@@ -58,70 +60,61 @@ function Logo({ size = "md" }: { size?: "md" | "lg" }) {
 
 export function LoginGate({ onLogin }: { onLogin: () => void }) {
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-primary-950 px-5 pb-8 pt-10 text-white">
-      <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 animate-float rounded-full bg-primary-500/50 blur-3xl" />
-      <div className="pointer-events-none absolute -right-20 top-52 h-72 w-72 animate-float rounded-full bg-coral-500/40 blur-3xl [animation-delay:-3s]" />
-      <div className="pointer-events-none absolute bottom-10 left-10 h-60 w-60 animate-float rounded-full bg-sun-400/30 blur-3xl [animation-delay:-6s]" />
-
-      <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col">
-        <div className="flex items-center gap-2.5">
+    <div className="min-h-screen bg-white px-4 py-4 text-ink sm:px-6 sm:py-6">
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col sm:min-h-[calc(100vh-3rem)]">
+        <div className="flex items-center justify-between px-2 py-2">
+          <div className="flex items-center gap-2.5">
           <Logo />
           <span className="font-display text-xl font-bold">Settle</span>
-        </div>
-
-        <div className="mt-12 animate-rise-in">
-          <h1 className="font-display text-[44px] font-extrabold leading-[1.02] tracking-tight text-balance">
-            Family money,{" "}
-            <span className="bg-gradient-to-r from-sun-300 via-coral-300 to-primary-300 bg-clip-text text-transparent">
-              sorted.
-            </span>
-          </h1>
-          <p className="mt-4 text-lg text-white/80">
-            One shared wallet for the whole family. Send, request and settle up in naira — in seconds.
-          </p>
-        </div>
-
-        {/* Product preview */}
-        <div className="relative mt-10 animate-rise-in [animation-delay:150ms]">
-          <div className="rotate-[-2deg] rounded-[28px] bg-gradient-to-br from-primary-400 via-primary-600 to-primary-800 p-5 shadow-2xl ring-1 ring-white/10">
-            <p className="text-sm font-semibold text-primary-100">Adeyemi Family</p>
-            <p className="tabular mt-1 font-display text-4xl font-extrabold">₦653,725</p>
-            <div className="mt-4 flex -space-x-2.5">
-              {["Mama Funke", "Chidi", "Ngozi"].map((n, i) => (
-                <Avatar key={n} name={n} size="sm" ring tone={i} />
-              ))}
-            </div>
           </div>
-          <div className="absolute -bottom-6 right-2 flex rotate-[3deg] items-center gap-2.5 rounded-2xl bg-white px-3.5 py-2.5 text-ink shadow-xl">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-white">
-              <SettleIcon size={16} />
-            </span>
-            <div>
-              <p className="text-xs font-medium text-ink-muted">Chidi paid you</p>
-              <p className="tabular font-display text-sm font-bold text-primary-700">+₦15,000</p>
-            </div>
-          </div>
+          <span className="hidden text-sm font-semibold text-ink-muted sm:block">Built for Nigerian families</span>
         </div>
 
-        <div className="mt-auto pt-16">
-          <ul className="mb-6 flex flex-wrap gap-2 text-sm font-medium text-white/85">
-            {["No seed phrases", "Balances in ₦", "Settles in seconds"].map((t) => (
-              <li key={t} className="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/15">
-                {t}
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            onClick={onLogin}
-            className="focus-ring w-full rounded-2xl bg-white py-4 font-display text-lg font-bold text-primary-800 shadow-xl transition-all hover:-translate-y-0.5 active:scale-[0.98]"
-          >
-            Get started
-          </button>
-          <p className="mt-3 text-center text-sm text-white/70">Continue with phone, email, Google or a passkey</p>
-          <p className="mt-2 text-center text-xs text-white/55">Your secure wallet is created automatically.</p>
-          <p className="mt-6 text-center text-xs text-white/60">Monad Metropolis · Track 02</p>
-        </div>
+        <main className="mt-5 grid flex-1 overflow-hidden rounded-[34px] border border-ink/15 bg-cream lg:grid-cols-[1.05fr_.95fr]">
+          <section className="flex flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
+            <span className="w-fit rounded-full border border-ink/15 bg-white/60 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em]">
+              Money, made familiar
+            </span>
+            <h1 className="mt-6 max-w-2xl font-display text-[48px] font-extrabold leading-[.96] tracking-[-0.045em] text-balance sm:text-[68px] lg:text-[78px]">
+              Family money, <span className="text-primary-600">finally simple.</span>
+            </h1>
+            <p className="mt-6 max-w-xl text-base leading-7 text-ink-muted sm:text-lg">
+              One shared wallet for the people you trust. Send, request and settle up in naira—without the crypto jargon.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <button type="button" onClick={onLogin} className="focus-ring rounded-full bg-primary-500 px-7 py-4 font-display text-base font-bold text-ink shadow-glow active:scale-[0.98]">
+                Get started
+              </button>
+              <p className="text-sm text-ink-muted">Phone, email, Google or passkey</p>
+            </div>
+            <div className="mt-10 flex items-center gap-3 text-sm text-ink-muted">
+              <div className="flex -space-x-2">
+                {["Mama Funke", "Chidi", "Ngozi"].map((n, i) => <Avatar key={n} name={n} size="sm" ring tone={i} />)}
+              </div>
+              <span>Built in Lagos, for families everywhere.</span>
+            </div>
+          </section>
+          <section className="relative flex min-h-[420px] items-center justify-center overflow-hidden bg-primary-500 p-8 lg:min-h-0">
+            <div className="absolute -right-12 -top-12 h-56 w-56 rounded-full border-[40px] border-[#dfff00]" />
+            <div className="absolute -bottom-20 -left-16 h-72 w-72 rotate-12 rounded-[64px] bg-[#dfff00]" />
+            <div className="relative w-full max-w-sm rounded-[32px] border border-white/25 bg-ink p-6 text-white shadow-2xl">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-white/60">Adeyemi Family</p>
+                <span className="rounded-full bg-primary-400/20 px-2.5 py-1 text-xs font-bold text-primary-300">Live</span>
+              </div>
+              <p className="tabular mt-3 font-display text-4xl font-extrabold tracking-tight">₦653,725</p>
+              <p className="mt-1 text-sm text-white/50">Available across 3 members</p>
+              <div className="mt-8 grid grid-cols-3 gap-2 border-t border-white/10 pt-5 text-center text-xs font-semibold text-white/70">
+                <span>Send</span><span>Request</span><span>Settle</span>
+              </div>
+              <div className="mt-5 flex items-center gap-3 rounded-[20px] bg-white p-3 text-ink">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 text-primary-700"><SettleIcon size={18} /></span>
+                <div className="flex-1"><p className="text-xs text-ink-muted">Chidi paid you</p><p className="tabular font-display font-bold">+₦15,000</p></div>
+                <span className="text-xs font-bold text-primary-700">Now</span>
+              </div>
+            </div>
+          </section>
+        </main>
       </div>
     </div>
   );
@@ -153,6 +146,8 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [recent, setRecent] = useState<Transaction[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const walletAddress = user?.wallet?.address || "";
   const userEmail = user?.email?.address;
@@ -181,6 +176,11 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
     };
     initAndLoad();
   }, [loadGroups]);
+
+  useEffect(() => {
+    if (!walletAddress) return;
+    getNotifications().then(setNotifications).catch(() => undefined);
+  }, [walletAddress]);
 
   const openGroup = (group: Group, action: GroupAction | null = null) => {
     setSelectedGroup(group);
@@ -231,13 +231,35 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
 
   return (
     <div className="flex min-h-screen flex-col bg-cream">
-      <header className="sticky top-0 z-30 border-b border-ink/5 bg-cream/85 px-4 py-3 backdrop-blur-lg">
+      <header className="sticky top-0 z-30 border-b border-ink/10 bg-cream/90 px-4 py-3 backdrop-blur-lg">
         <div className="mx-auto flex max-w-lg items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Logo />
             <span className="font-display text-xl font-bold text-ink">Settle</span>
           </div>
           <div className="flex items-center gap-1">
+            <div className="relative">
+              <button type="button" aria-label="Notifications" onClick={async () => {
+                setShowNotifications((value) => !value);
+                if (notifications.some((item) => !item.readAt)) {
+                  await markNotificationsRead().catch(() => undefined);
+                  setNotifications((items) => items.map((item) => ({ ...item, readAt: new Date().toISOString() })));
+                }
+              }} className="focus-ring relative flex h-10 w-10 items-center justify-center rounded-full text-lg text-ink-muted hover:bg-ink/5">
+                <span aria-hidden="true">♢</span>
+                {notifications.some((item) => !item.readAt) && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-coral-500" />}
+              </button>
+              {showNotifications && (
+                <div className="absolute right-0 top-12 z-40 w-72 rounded-2xl bg-white p-3 shadow-2xl ring-1 ring-ink/10">
+                  <p className="px-2 pb-2 font-display font-bold text-ink">Notifications</p>
+                  {notifications.length === 0 ? <p className="px-2 py-4 text-sm text-ink-muted">You&apos;re all caught up.</p> : (
+                    <ul className="max-h-72 divide-y divide-ink/5 overflow-auto">
+                      {notifications.slice(0, 8).map((item) => <li key={item.id} className="px-2 py-3"><p className="text-sm font-bold text-ink">{item.title}</p><p className="mt-0.5 text-xs leading-5 text-ink-muted">{item.body}</p></li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
             <Avatar name={myName} seed={walletAddress} size="sm" />
             <IconButton label="Sign out" onClick={onLogout}>
               <LogoutIcon size={18} />
@@ -291,7 +313,7 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
 
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/5 bg-white/90 pb-safe backdrop-blur-lg"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 pb-safe backdrop-blur-lg"
       >
         <div className="mx-auto flex max-w-lg px-6">
           <TabButton
@@ -355,8 +377,8 @@ function TabButton({
       className="focus-ring flex flex-1 flex-col items-center gap-1 pb-2 pt-2.5"
     >
       <span
-        className={`flex h-8 w-14 items-center justify-center rounded-full transition-all duration-300 ${
-          active ? "bg-primary-100 text-primary-700" : "text-ink-muted"
+        className={`flex h-8 w-14 items-center justify-center rounded-full ${
+          active ? "bg-ink text-primary-400" : "text-ink-muted"
         }`}
       >
         {icon}
@@ -450,11 +472,11 @@ function HomeView({
         />
       )}
 
-      <section className="relative animate-rise-in overflow-hidden rounded-[28px] bg-gradient-to-br from-primary-500 via-primary-600 to-primary-900 p-6 text-white shadow-glow [animation-delay:80ms]">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 animate-float rounded-full bg-sun-300/35 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 animate-float rounded-full bg-coral-400/30 blur-3xl [animation-delay:-4s]" />
+      <section className="relative animate-rise-in overflow-hidden rounded-[28px] bg-ink p-6 text-white shadow-card [animation-delay:80ms]">
+        <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full border-[32px] border-primary-500/90" />
+        <div className="pointer-events-none absolute -bottom-24 -left-16 h-52 w-52 rotate-12 rounded-[48px] bg-[#dfff00]/90" />
         <div className="relative">
-          <p className="text-sm font-semibold text-primary-100">Your money</p>
+          <p className="text-sm font-semibold text-white/60">Your money</p>
           <p className="tabular mt-1 font-display text-[44px] font-extrabold leading-none tracking-tight">
             {formatNgn(animatedBalance)}
           </p>
@@ -465,7 +487,7 @@ function HomeView({
                 : "No family wallets yet"}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold">
-              <BoltIcon size={12} className="text-sun-300" /> On-chain
+              <BoltIcon size={12} className="text-primary-300" /> Protected
             </span>
           </div>
           {process.env.NEXT_PUBLIC_ENABLE_TESTNET_FAUCET === "true" && (

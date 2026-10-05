@@ -145,7 +145,7 @@ ENABLE_DEMO_MODE=false
 NEXT_PUBLIC_ENABLE_DEMO_MODE=false
 ```
 
-Production mode fails closed: API calls require a verified Privy access token, sends require a confirmed USDC transfer, and direct balance mutation/demo imports are disabled. Run `npm run db:push` after upgrading so the idempotency and unique transaction constraints are applied.
+Production mode fails closed: API calls require a verified Privy access token, sends require a confirmed USDC transfer, and direct balance mutation/demo imports are disabled. Run `npm run db:migrate` after upgrading so transfer protection, group roles, notifications, lifecycle metadata and audit records are applied.
 
 For the gasless hackathon flow, enable gas sponsorship for Monad in the Privy dashboard and set `NEXT_PUBLIC_SPONSOR_GAS=true`. The app then submits USDC transfers through Privy's sponsored transaction API and labels the network fee as covered by Settle. Configure `MONAD_RPC_URL` with a dedicated provider endpoint and list comma-separated backups in `MONAD_RPC_FALLBACK_URLS`; server-side balance reads and receipt verification automatically fail over.
 
@@ -298,7 +298,11 @@ npm run typecheck  # Run TypeScript type check
 - **Hide-crypto UX**: All primary flows use Naira (₦) amounts. Crypto terminology only appears in footer disclaimers or demo mode labels.
 - **Demo rate**: ≈ $1 = ₦1,580 (static mock rate for demo purposes)
 - **Max 3 members**: Per MVP requirements, family wallets cap at 3 members.
-- **API authentication**: Write APIs are currently unauthenticated (wallet address passed from client). Production would require proper auth middleware.
+- **API authentication**: API callers are verified with Privy server tokens; group and transaction access is checked against the authenticated embedded wallet.
+- **Family controls**: Owners can rotate invite codes and remove members with settled balances. Members can leave after settling their balance. These actions are recorded in the audit log.
+- **Notifications**: Requests, transfers and membership changes produce in-app notifications. Email, SMS, WhatsApp and push delivery still require external providers.
+- **Operations**: `GET /api/operations` exposes counts, recent audit activity and failed transactions only to wallets listed in `ADMIN_WALLETS`.
+- **Security**: APIs have basic per-instance rate limiting, production responses omit framework branding, and global anti-sniffing, anti-framing, permissions and referrer headers are enabled. Distributed rate limiting should replace the in-memory limiter when running across multiple server instances.
 
 ---
 

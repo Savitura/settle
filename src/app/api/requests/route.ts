@@ -3,6 +3,7 @@ import { eq, or, and, sql, desc } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db/connection";
 import { ApiError, apiErrorResponse, authenticateRequest, sameAddress } from "@/lib/server/auth";
+import { notify, recordAudit } from "@/lib/server/operations";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -139,6 +140,11 @@ export async function POST(request: NextRequest) {
       createdAt: now,
     });
 
+    await Promise.all([
+      notify(toAddress, "money_request", "New money request", `${amountNgn} NGN was requested from you.`, groupId),
+      recordAudit(auth.walletAddress, "request.created", "money_request", id, { groupId, toAddress, amountNgn }),
+    ]);
+
     return NextResponse.json({
       request: {
         id,
@@ -199,6 +205,12 @@ export async function PATCH(request: NextRequest) {
       .update(schema.moneyRequests)
       .set(updateData)
       .where(eq(schema.moneyRequests.id, requestId));
+
+    const otherWallet = sameAddress(existing.fromAddress, auth.walletAddress) ? existing.toAddress : existing.fromAddress;
+    await Promise.all([
+      notify(otherWallet, `request_${status}`, `Request ${status}`, `A money request was ${status}.`, existing.groupId),
+      recordAudit(auth.walletAddress, `request.${status}`, "money_request", requestId),
+    ]);
 
     const updated = await db.query.moneyRequests.findFirst({
       where: eq(schema.moneyRequests.id, requestId),

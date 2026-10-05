@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
       phone: phone || null,
       joinedAt: now,
       balanceUsdc: "0",
+      role: "member",
     });
 
     const updatedMembers = [...members, {

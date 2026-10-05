@@ -22,7 +22,7 @@ export function GroupCard({ group, onClick, currentUserWallet, index = 0 }: Grou
       type="button"
       onClick={onClick}
       style={{ animationDelay: `${index * 70}ms` }}
-      className="focus-ring card group w-full animate-rise-in text-left transition-all hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.99]"
+      className="focus-ring card group w-full animate-rise-in text-left hover:bg-[#fcfcf4] active:scale-[0.99]"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex -space-x-3">

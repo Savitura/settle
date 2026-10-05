@@ -7,6 +7,7 @@ import {
   getTransactionsByGroup,
   getRequestsByGroup,
   getPendingRequestsForWallet,
+  manageGroup,
 } from "@/lib/db";
 import { Group, Transaction, MoneyRequest } from "@/lib/types";
 import { formatNgn, usdcToNgn } from "@/lib/currency";
@@ -50,6 +51,8 @@ export function GroupDetail({
   const [pendingRequests, setPendingRequests] = useState<MoneyRequest[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [highlightPending, setHighlightPending] = useState(false);
+  const [managementMessage, setManagementMessage] = useState("");
+  const [managing, setManaging] = useState(false);
   const pendingRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async () => {
@@ -121,6 +124,22 @@ export function GroupDetail({
   const handleSettleSuccess = async () => {
     await refreshAll();
     setSelectedRequest(null);
+  };
+
+  const runGroupAction = async (action: "rotate_invite" | "remove_member" | "leave", memberId?: string) => {
+    setManaging(true);
+    setManagementMessage("");
+    try {
+      const result = await manageGroup({ action, groupId: group.id, memberId });
+      if (action === "rotate_invite") setManagementMessage(`New invite code: ${result.inviteCode}`);
+      else if (action === "leave") { onBack(); return; }
+      else setManagementMessage("Member removed");
+      await onRefresh();
+    } catch (error) {
+      setManagementMessage(error instanceof Error ? error.message : "Group action failed");
+    } finally {
+      setManaging(false);
+    }
   };
 
   const nameFor = (address: string) =>
@@ -345,6 +364,11 @@ export function GroupDetail({
                 <p className="tabular font-display font-bold text-ink">
                   {formatNgn(usdcToNgn(parseFloat(member.balance.usdc)))}
                 </p>
+                {isCreator && !isMe && parseFloat(member.balance.usdc) === 0 && (
+                  <button type="button" disabled={managing} onClick={() => runGroupAction("remove_member", member.id)} className="text-xs font-bold text-coral-700 disabled:opacity-50">
+                    Remove
+                  </button>
+                )}
               </li>
             );
           })}
@@ -354,6 +378,18 @@ export function GroupDetail({
             {3 - group.members.length} spot{3 - group.members.length !== 1 ? "s" : ""} left
           </p>
         )}
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-ink/10 pt-4">
+          {isCreator ? (
+            <button type="button" disabled={managing} onClick={() => runGroupAction("rotate_invite")} className="rounded-full border border-ink/15 px-3 py-2 text-xs font-bold text-ink-soft disabled:opacity-50">
+              Replace invite code
+            </button>
+          ) : (
+            <button type="button" disabled={managing || currentBalance !== 0} onClick={() => runGroupAction("leave")} className="rounded-full border border-coral-200 px-3 py-2 text-xs font-bold text-coral-700 disabled:opacity-50">
+              Leave wallet
+            </button>
+          )}
+          {managementMessage && <p className="w-full text-xs text-ink-muted" role="status">{managementMessage}</p>}
+        </div>
       </section>
 
       <ActivityFeed

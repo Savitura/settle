@@ -21,6 +21,7 @@ export const groupMembers = pgTable("group_members", {
   phone: varchar("phone", { length: 20 }),
   joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
   balanceUsdc: text("balance_usdc").default("0").notNull(),
+  role: varchar("role", { length: 20 }).default("member").notNull(),
 }, (table) => [
   index("members_group_idx").on(table.groupId),
   index("members_wallet_idx").on(table.walletAddress),
@@ -40,6 +41,8 @@ export const transactions = pgTable("transactions", {
   idempotencyKey: varchar("idempotency_key", { length: 80 }),
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  failureReason: text("failure_reason"),
 }, (table) => [
   index("tx_group_idx").on(table.groupId),
   index("tx_from_idx").on(table.fromAddress),
@@ -74,4 +77,31 @@ export const testnetFaucetClaims = pgTable("testnet_faucet_claims", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("faucet_wallet_idx").on(table.walletAddress),
+]);
+
+export const notifications = pgTable("notifications", {
+  id: text("id").primaryKey(),
+  walletAddress: varchar("wallet_address", { length: 42 }).notNull(),
+  groupId: text("group_id").references(() => groups.id, { onDelete: "cascade" }),
+  type: varchar("type", { length: 40 }).notNull(),
+  title: varchar("title", { length: 120 }).notNull(),
+  body: text("body").notNull(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("notifications_wallet_idx").on(table.walletAddress),
+  index("notifications_group_idx").on(table.groupId),
+]);
+
+export const auditEvents = pgTable("audit_events", {
+  id: text("id").primaryKey(),
+  actorWallet: varchar("actor_wallet", { length: 42 }).notNull(),
+  action: varchar("action", { length: 80 }).notNull(),
+  targetType: varchar("target_type", { length: 40 }).notNull(),
+  targetId: text("target_id").notNull(),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("audit_actor_idx").on(table.actorWallet),
+  index("audit_target_idx").on(table.targetType, table.targetId),
 ]);

@@ -7,6 +7,7 @@ import { decodeEventLog, erc20Abi, parseUnits } from "viem";
 import { getDb, schema } from "@/lib/db/connection";
 import { ApiError, apiErrorResponse, authenticateRequest, sameAddress } from "@/lib/server/auth";
 import { getMonadPublicClient } from "@/lib/server/rpc";
+import { notify, recordAudit } from "@/lib/server/operations";
 
 const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 const transferSchema = z.object({
@@ -94,6 +95,11 @@ export async function POST(request: NextRequest) {
 
     const transaction = await db.query.transactions.findFirst({ where: eq(schema.transactions.idempotencyKey, idempotencyKey) });
     if (!transaction) throw new ApiError(409, "Insufficient balance or duplicate transfer");
+
+    await Promise.all([
+      notify(recipient.walletAddress, "money_received", "Money received", `${input.amountNgn} NGN was sent to you.`, input.groupId),
+      recordAudit(auth.walletAddress, input.requestId ? "transfer.settled" : "transfer.sent", "transaction", transaction.id, { groupId: input.groupId, txHash }),
+    ]);
 
     return NextResponse.json({ transaction: serialize(transaction) }, { status: 201 });
   } catch (error) {
