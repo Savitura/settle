@@ -35,14 +35,16 @@ export const transactions = pgTable("transactions", {
   toAddress: varchar("to_address", { length: 42 }).notNull(),
   amountUsdc: text("amount_usdc").notNull(),
   amountNgn: text("amount_ngn").notNull(),
-  txHash: varchar("tx_hash", { length: 66 }).notNull(),
+  txHash: varchar("tx_hash", { length: 66 }).notNull().unique(),
   status: varchar("status", { length: 20 }).notNull(),
+  idempotencyKey: varchar("idempotency_key", { length: 80 }),
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("tx_group_idx").on(table.groupId),
   index("tx_from_idx").on(table.fromAddress),
   index("tx_to_idx").on(table.toAddress),
+  unique("tx_idempotency_key_unique").on(table.idempotencyKey),
 ]);
 
 export const moneyRequests = pgTable("money_requests", {
@@ -62,4 +64,14 @@ export const moneyRequests = pgTable("money_requests", {
   index("req_from_idx").on(table.fromAddress),
   index("req_to_idx").on(table.toAddress),
   index("req_status_idx").on(table.status),
+]);
+
+export const testnetFaucetClaims = pgTable("testnet_faucet_claims", {
+  id: text("id").primaryKey(),
+  walletAddress: varchar("wallet_address", { length: 42 }).notNull().unique(),
+  amountUsdc: text("amount_usdc").notNull(),
+  txHash: varchar("tx_hash", { length: 66 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("faucet_wallet_idx").on(table.walletAddress),
 ]);

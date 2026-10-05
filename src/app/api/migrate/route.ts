@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db/connection";
+import { ApiError, apiErrorResponse, authenticateRequest } from "@/lib/server/auth";
 
 interface MigrationGroup {
   id: string;
@@ -57,6 +58,8 @@ interface MigrationRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    await authenticateRequest(request);
+    if (process.env.ENABLE_DEMO_MODE !== "true") throw new ApiError(403, "Legacy data migration is disabled");
     const body = await request.json();
     const { groups, transactions, requests } = body as {
       groups?: MigrationGroup[];
@@ -184,10 +187,6 @@ export async function POST(request: NextRequest) {
       skipped,
     });
   } catch (error) {
-    console.error("Error migrating data:", error);
-    return NextResponse.json(
-      { error: "Failed to migrate data", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to migrate data");
   }
 }

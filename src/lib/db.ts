@@ -7,6 +7,7 @@ import {
   CreateMoneyRequestInput,
   MoneyRequestStatus,
 } from "./types";
+import { getAccessToken } from "@privy-io/react-auth";
 
 const GROUPS_STORAGE_KEY = "settle_groups";
 const TRANSACTIONS_STORAGE_KEY = "settle_transactions";
@@ -22,10 +23,12 @@ function getBaseUrl(): string {
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const baseUrl = getBaseUrl();
+  const accessToken = typeof window !== "undefined" ? await getAccessToken() : null;
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...options?.headers,
     },
   });
@@ -36,6 +39,25 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   return response.json();
+}
+
+export async function transferMoney(input: {
+  groupId: string;
+  toAddress: string;
+  amountNgn: string;
+  note?: string;
+  requestId?: string;
+  txHash?: string;
+}): Promise<Transaction> {
+  const result = await fetchApi<{ transaction: Transaction }>("/api/transfers", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return result.transaction;
+}
+
+export async function fundDemoWallet(): Promise<{ amountUsdc: string; txHash: string }> {
+  return fetchApi<{ amountUsdc: string; txHash: string }>("/api/faucet", { method: "POST" });
 }
 
 export async function migrateLocalStorageData(): Promise<{ migrated: boolean; imported?: { groups: number; members: number; transactions: number; requests: number } }> {

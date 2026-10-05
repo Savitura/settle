@@ -1,11 +1,11 @@
-const MOCK_NGN_RATE = 1580;
+const NGN_RATE = Number(process.env.NEXT_PUBLIC_NGN_PER_USDC || 1580);
 
 export function usdcToNgn(usdc: number): number {
-  return usdc * MOCK_NGN_RATE;
+  return usdc * NGN_RATE;
 }
 
 export function ngnToUsdc(ngn: number): number {
-  return ngn / MOCK_NGN_RATE;
+  return ngn / NGN_RATE;
 }
 
 export function formatNgn(amount: number): string {
@@ -49,5 +49,5 @@ export function getExplorerAddressUrl(address: string): string {
 }
 
 export function getNgnRate(): number {
-  return MOCK_NGN_RATE;
+  return NGN_RATE;
 }

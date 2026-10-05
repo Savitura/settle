@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, like, and, sql } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db/connection";
+import { ApiError, apiErrorResponse, authenticateRequest, sameAddress } from "@/lib/server/auth";
 
 export async function DELETE(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request);
+    if (process.env.ENABLE_DEMO_MODE !== "true") throw new ApiError(404, "Demo mode is disabled");
     const { searchParams } = new URL(request.url);
     const walletAddress = searchParams.get("wallet");
 
@@ -14,6 +17,7 @@ export async function DELETE(request: NextRequest) {
         { status: 400 }
       );
     }
+    if (!sameAddress(walletAddress, auth.walletAddress)) throw new ApiError(403, "Invalid wallet");
 
     const db = getDb();
 
@@ -67,16 +71,14 @@ export async function DELETE(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error deleting demo data:", error);
-    return NextResponse.json(
-      { error: "Failed to delete demo data" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to delete demo data");
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request);
+    if (process.env.ENABLE_DEMO_MODE !== "true") throw new ApiError(404, "Demo mode is disabled");
     const { searchParams } = new URL(request.url);
     const walletAddress = searchParams.get("wallet");
 
@@ -86,6 +88,7 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+    if (!sameAddress(walletAddress, auth.walletAddress)) throw new ApiError(403, "Invalid wallet");
 
     const db = getDb();
 
@@ -105,10 +108,6 @@ export async function GET(request: NextRequest) {
       demoGroupCount: demoGroups.length,
     });
   } catch (error) {
-    console.error("Error checking demo data:", error);
-    return NextResponse.json(
-      { error: "Failed to check demo data" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to check demo data");
   }
 }

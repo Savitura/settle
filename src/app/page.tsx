@@ -29,7 +29,7 @@ export default function Home() {
     <PrivyProvider
       appId={appId}
       config={{
-        loginMethods: ["email", "sms"],
+        loginMethods: ["email", "sms", "google", "passkey"],
         appearance: {
           theme: "light",
           accentColor: "#04955c",

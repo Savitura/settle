@@ -8,6 +8,7 @@ import {
   getGroupById,
   migrateLocalStorageData,
   getTransactionsByWallet,
+  fundDemoWallet,
 } from "@/lib/db";
 import { Group, Transaction } from "@/lib/types";
 import { formatNgn, usdcToNgn } from "@/lib/currency";
@@ -117,7 +118,8 @@ export function LoginGate({ onLogin }: { onLogin: () => void }) {
           >
             Get started
           </button>
-          <p className="mt-3 text-center text-sm text-white/70">Sign in with your email or phone number</p>
+          <p className="mt-3 text-center text-sm text-white/70">Continue with phone, email, Google or a passkey</p>
+          <p className="mt-2 text-center text-xs text-white/55">Your secure wallet is created automatically.</p>
           <p className="mt-6 text-center text-xs text-white/60">Monad Metropolis · Track 02</p>
         </div>
       </div>
@@ -172,7 +174,9 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
 
   useEffect(() => {
     const initAndLoad = async () => {
-      await migrateLocalStorageData();
+      if (process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true") {
+        await migrateLocalStorageData();
+      }
       loadGroups();
     };
     initAndLoad();
@@ -258,6 +262,7 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
               onJoinGroup={() => setShowJoinModal(true)}
               onDemoLoaded={handleDemoLoaded}
               onDemoCleared={handleDemoCleared}
+              onRefresh={loadGroups}
             />
           )}
           {activeTab === "groups" &&
@@ -373,6 +378,7 @@ function HomeView({
   onJoinGroup,
   onDemoLoaded,
   onDemoCleared,
+  onRefresh,
 }: {
   name: string;
   groups: Group[];
@@ -385,7 +391,10 @@ function HomeView({
   onJoinGroup: () => void;
   onDemoLoaded: (group: Group) => void;
   onDemoCleared: () => void;
+  onRefresh: () => Promise<void>;
 }) {
+  const [fundingState, setFundingState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [fundingMessage, setFundingMessage] = useState("");
   const hasGroups = groups.length > 0;
   const myBalanceUsdc = groups.reduce((sum, g) => {
     const me = g.members.find((m) => m.walletAddress.toLowerCase() === walletAddress.toLowerCase());
@@ -409,6 +418,20 @@ function HomeView({
   // Only offer actions that will actually do something in the wallet they open
   const quick = quickAll.filter((a) => a.key !== "invite" || (primaryGroup && primaryGroup.members.length < 3));
 
+  const handleDemoFunding = async () => {
+    setFundingState("loading");
+    setFundingMessage("");
+    try {
+      const result = await fundDemoWallet();
+      setFundingState("success");
+      setFundingMessage(`${result.amountUsdc} demo USDC added`);
+      await onRefresh();
+    } catch (error) {
+      setFundingState("error");
+      setFundingMessage(error instanceof Error ? error.message : "Demo funding failed");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="animate-rise-in">
@@ -416,14 +439,16 @@ function HomeView({
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">{name}</h1>
       </div>
 
-      <DemoBanner
-        walletAddress={walletAddress}
-        userEmail={userEmail}
-        userPhone={userPhone}
-        onDemoLoaded={onDemoLoaded}
-        onDemoCleared={onDemoCleared}
-        hasGroups={hasGroups}
-      />
+      {process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" && (
+        <DemoBanner
+          walletAddress={walletAddress}
+          userEmail={userEmail}
+          userPhone={userPhone}
+          onDemoLoaded={onDemoLoaded}
+          onDemoCleared={onDemoCleared}
+          hasGroups={hasGroups}
+        />
+      )}
 
       <section className="relative animate-rise-in overflow-hidden rounded-[28px] bg-gradient-to-br from-primary-500 via-primary-600 to-primary-900 p-6 text-white shadow-glow [animation-delay:80ms]">
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 animate-float rounded-full bg-sun-300/35 blur-3xl" />
@@ -440,9 +465,30 @@ function HomeView({
                 : "No family wallets yet"}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold">
-              <BoltIcon size={12} className="text-sun-300" /> Instant
+              <BoltIcon size={12} className="text-sun-300" /> On-chain
             </span>
           </div>
+          {process.env.NEXT_PUBLIC_ENABLE_TESTNET_FAUCET === "true" && (
+            <div className="mt-4 border-t border-white/15 pt-4">
+              <button
+                type="button"
+                onClick={handleDemoFunding}
+                disabled={fundingState === "loading" || fundingState === "success"}
+                className="focus-ring w-full rounded-xl bg-white/15 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {fundingState === "loading"
+                  ? "Adding demo funds…"
+                  : fundingState === "success"
+                    ? "Demo funds added"
+                    : "Get demo funds"}
+              </button>
+              {fundingMessage && (
+                <p className={`mt-2 text-center text-xs ${fundingState === "error" ? "text-coral-100" : "text-primary-100"}`} role="status">
+                  {fundingMessage}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

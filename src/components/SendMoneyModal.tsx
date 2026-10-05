@@ -1,16 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSendTransaction, useWallets } from "@privy-io/react-auth";
+import { encodeFunctionData, erc20Abi, parseUnits } from "viem";
 
 import { Group, Transaction } from "@/lib/types";
-import { createTransaction, updateMemberBalance } from "@/lib/db";
-import { generateMockTxHash, formatNgn, getNgnRate } from "@/lib/currency";
+import { transferMoney } from "@/lib/db";
+import { formatNgn, getNgnRate } from "@/lib/currency";
 import { Sheet, SheetHeader, StepPanel } from "./ui/Sheet";
 import { AmountInput } from "./ui/AmountInput";
 import { MemberPicker } from "./ui/MemberPicker";
 import { Avatar, memberName } from "./ui/Avatar";
 import { ProcessingView, SuccessView, ErrorView } from "./ui/Status";
 import { BoltIcon } from "./ui/Icons";
+import { monadTestnet } from "@/lib/monad";
 
 interface SendMoneyModalProps {
   isOpen: boolean;
@@ -20,7 +23,7 @@ interface SendMoneyModalProps {
   onSuccess: () => void;
 }
 
-type SendStep = "form" | "confirm" | "sending" | "success" | "error";
+type SendStep = "form" | "confirm" | "submitting" | "confirming" | "success" | "error";
 
 export function SendMoneyModal({
   isOpen,
@@ -29,6 +32,8 @@ export function SendMoneyModal({
   currentUserWallet,
   onSuccess,
 }: SendMoneyModalProps) {
+  const { wallets } = useWallets();
+  const { sendTransaction } = useSendTransaction();
   const rate = getNgnRate();
   const [step, setStep] = useState<SendStep>("form");
   const [amount, setAmount] = useState("");
@@ -36,6 +41,8 @@ export function SendMoneyModal({
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [error, setError] = useState("");
   const [showCashOut, setShowCashOut] = useState(false);
+  const [pendingTxHash, setPendingTxHash] = useState<`0x${string}` | null>(null);
+  const [paymentSubmitted, setPaymentSubmitted] = useState(false);
 
   const currentMember = group.members.find(
     (m) => m.walletAddress.toLowerCase() === currentUserWallet.toLowerCase()
@@ -66,34 +73,44 @@ export function SendMoneyModal({
   };
 
   const handleSend = async () => {
-    setStep("sending");
+    setStep(pendingTxHash ? "confirming" : "submitting");
     setError("");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      const txHash = generateMockTxHash();
       const recipientAddress = selectedMember?.walletAddress || "";
-
-      const newTx = await createTransaction({
+      let txHash: `0x${string}` | undefined = pendingTxHash || undefined;
+      if (process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE !== "true") {
+        const tokenAddress = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS;
+        const wallet = wallets.find((candidate) => candidate.address.toLowerCase() === currentUserWallet.toLowerCase());
+        if (!wallet || !tokenAddress || /^0x0{40}$/i.test(tokenAddress)) {
+          throw new Error("USDC settlement is not configured");
+        }
+        if (!txHash) {
+          await wallet.switchChain(monadTestnet.id);
+          const result = await sendTransaction({
+            to: tokenAddress,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [recipientAddress as `0x${string}`, parseUnits(usdcAmount.toFixed(6), 6)],
+            }),
+            chainId: monadTestnet.id,
+          }, {
+            address: currentUserWallet,
+            sponsor: process.env.NEXT_PUBLIC_SPONSOR_GAS === "true",
+          });
+          txHash = result.hash;
+          setPendingTxHash(txHash);
+          setPaymentSubmitted(true);
+        }
+        setStep("confirming");
+      }
+      const newTx = await transferMoney({
         groupId: group.id,
-        type: "send",
-        fromAddress: currentUserWallet,
         toAddress: recipientAddress,
-        amountUsdc: usdcAmount.toFixed(6),
         amountNgn: ngnAmount.toFixed(0),
         txHash,
-        status: "confirmed",
       });
-
-      const newSenderBalance = (currentBalanceUsdc - usdcAmount).toFixed(6);
-      await updateMemberBalance(group.id, currentUserWallet, newSenderBalance);
-
-      if (selectedMember) {
-        const recipientBalance = parseFloat(selectedMember.balance.usdc || "0");
-        const newRecipientBalance = (recipientBalance + usdcAmount).toFixed(6);
-        await updateMemberBalance(group.id, selectedMember.walletAddress, newRecipientBalance);
-      }
 
       setTransaction(newTx);
       setStep("success");
@@ -110,6 +127,8 @@ export function SendMoneyModal({
     setTransaction(null);
     setError("");
     setShowCashOut(false);
+    setPendingTxHash(null);
+    setPaymentSubmitted(false);
   };
 
   const handleClose = () => {
@@ -135,7 +154,7 @@ export function SendMoneyModal({
   }, [isOpen, otherMembers, selectedMemberId]);
 
   return (
-    <Sheet isOpen={isOpen} onClose={handleClose} label="Send money" locked={step === "sending"}>
+    <Sheet isOpen={isOpen} onClose={handleClose} label="Send money" locked={step === "submitting" || step === "confirming"}>
       {step === "form" && (
         <StepPanel stepKey="form">
           <SheetHeader title="Send money" onClose={handleClose} step={1} totalSteps={2} />
@@ -163,7 +182,7 @@ export function SendMoneyModal({
               error={error}
             />
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-cream p-4">
+            {process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" && <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-cream p-4">
               <input
                 type="checkbox"
                 checked={showCashOut}
@@ -176,7 +195,7 @@ export function SendMoneyModal({
                   In the full product this lands in a bank account or mobile money. In the demo, it updates their balance.
                 </span>
               </span>
-            </label>
+            </label>}
 
             <button type="button" onClick={handleContinue} disabled={!isValidForm} className="btn-primary">
               {ngnAmount > 0 && selectedMember
@@ -211,8 +230,11 @@ export function SendMoneyModal({
 
             <dl className="mt-5 divide-y divide-ink/5 rounded-2xl bg-cream px-4">
               <Row label={`${recipientName} gets`} value={formatNgn(ngnAmount)} strong />
-              <Row label="Fee" value="₦0" />
-              <Row label="Arrives" value={<span className="inline-flex items-center gap-1"><BoltIcon size={14} className="text-sun-500" /> In seconds</span>} />
+              <Row
+                label="Network fee"
+                value={process.env.NEXT_PUBLIC_SPONSOR_GAS === "true" ? "Covered by Settle" : "Paid in MON"}
+              />
+              <Row label="Settlement" value={<span className="inline-flex items-center gap-1"><BoltIcon size={14} className="text-sun-500" /> After confirmation</span>} />
               {showCashOut && <Row label="Cash out" value="To bank (demo)" />}
               <Row label="Your balance after" value={formatNgn(currentBalanceNgn - ngnAmount)} />
             </dl>
@@ -224,11 +246,13 @@ export function SendMoneyModal({
         </StepPanel>
       )}
 
-      {step === "sending" && (
-        <StepPanel stepKey="sending">
+      {(step === "submitting" || step === "confirming") && (
+        <StepPanel stepKey={step}>
           <ProcessingView
-            title={`Sending ${formatNgn(ngnAmount)}`}
-            subtitle={`On its way to ${recipientName}…`}
+            title={step === "submitting" ? "Preparing payment" : "Confirming payment"}
+            subtitle={step === "submitting"
+              ? `Authorizing ${formatNgn(ngnAmount)} to ${recipientName}…`
+              : "Submitted to Monad. This can take a little longer during busy periods."}
             from={<Avatar name={myName} seed={currentUserWallet} size="lg" />}
             to={<Avatar name={recipientName} seed={selectedMember?.walletAddress} size="lg" />}
           />
@@ -253,7 +277,7 @@ export function SendMoneyModal({
             <span className="tabular font-bold text-ink">{formatNgn(ngnAmount)}</span> is with {recipientName}.
             <br />
             <span className="text-sm text-ink-muted">
-              {showCashOut ? "Cash out started (demo)." : "They can cash out whenever they're ready."}
+              {showCashOut ? "Cash out started (demo)." : "USDC transfer confirmed on Monad."}
             </span>
           </SuccessView>
         </StepPanel>
@@ -261,7 +285,12 @@ export function SendMoneyModal({
 
       {step === "error" && (
         <StepPanel stepKey="error">
-          <ErrorView message={error} onRetry={() => setStep("confirm")} onClose={handleClose} />
+          <ErrorView
+            message={error}
+            onRetry={paymentSubmitted ? handleSend : () => setStep("confirm")}
+            onClose={handleClose}
+            fundsMayHaveMoved={paymentSubmitted}
+          />
         </StepPanel>
       )}
     </Sheet>

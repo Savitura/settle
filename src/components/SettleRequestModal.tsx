@@ -1,13 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSendTransaction, useWallets } from "@privy-io/react-auth";
+import { encodeFunctionData, erc20Abi, parseUnits } from "viem";
 
 import { Group, MoneyRequest, Transaction } from "@/lib/types";
-import { updateRequestStatus, updateMemberBalance, createTransaction } from "@/lib/db";
-import { formatNgn, generateMockTxHash, getNgnRate } from "@/lib/currency";
+import { updateRequestStatus, transferMoney } from "@/lib/db";
+import { formatNgn, getNgnRate } from "@/lib/currency";
 import { Sheet, SheetHeader, StepPanel } from "./ui/Sheet";
 import { Avatar, memberName } from "./ui/Avatar";
 import { ProcessingView, SuccessView, ErrorView } from "./ui/Status";
+import { monadTestnet } from "@/lib/monad";
 
 interface SettleRequestModalProps {
   isOpen: boolean;
@@ -18,7 +21,7 @@ interface SettleRequestModalProps {
   onSuccess: () => void;
 }
 
-type SettleStep = "confirm" | "sending" | "success" | "error";
+type SettleStep = "confirm" | "submitting" | "confirming" | "success" | "error";
 
 export function SettleRequestModal({
   isOpen,
@@ -28,10 +31,14 @@ export function SettleRequestModal({
   currentUserWallet,
   onSuccess,
 }: SettleRequestModalProps) {
+  const { wallets } = useWallets();
+  const { sendTransaction } = useSendTransaction();
   const rate = getNgnRate();
   const [step, setStep] = useState<SettleStep>("confirm");
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [error, setError] = useState("");
+  const [pendingTxHash, setPendingTxHash] = useState<`0x${string}` | null>(null);
+  const [paymentSubmitted, setPaymentSubmitted] = useState(false);
 
   const requester = group.members.find(
     (m) => m.walletAddress.toLowerCase() === request.fromAddress.toLowerCase()
@@ -56,36 +63,43 @@ export function SettleRequestModal({
       return;
     }
 
-    setStep("sending");
+    setStep(pendingTxHash ? "confirming" : "submitting");
     setError("");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      const txHash = generateMockTxHash();
-
-      const newTx = await createTransaction({
-        groupId: group.id,
-        type: "settle",
-        fromAddress: currentUserWallet,
-        toAddress: request.fromAddress,
-        amountUsdc: request.amountUsdc,
-        amountNgn: request.amountNgn,
-        txHash,
-        status: "confirmed",
-        note: request.note,
-      });
-
-      const newPayerBalance = (currentBalanceUsdc - requestAmountUsdc).toFixed(6);
-      await updateMemberBalance(group.id, currentUserWallet, newPayerBalance);
-
-      if (requester) {
-        const requesterBalance = parseFloat(requester.balance.usdc || "0");
-        const newRequesterBalance = (requesterBalance + requestAmountUsdc).toFixed(6);
-        await updateMemberBalance(group.id, requester.walletAddress, newRequesterBalance);
+      let txHash: `0x${string}` | undefined = pendingTxHash || undefined;
+      if (process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE !== "true") {
+        const tokenAddress = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS;
+        const wallet = wallets.find((candidate) => candidate.address.toLowerCase() === currentUserWallet.toLowerCase());
+        if (!wallet || !tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new Error("USDC settlement is not configured");
+        if (!txHash) {
+          await wallet.switchChain(monadTestnet.id);
+          const result = await sendTransaction({
+            to: tokenAddress,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [request.fromAddress as `0x${string}`, parseUnits(request.amountUsdc, 6)],
+            }),
+            chainId: monadTestnet.id,
+          }, {
+            address: currentUserWallet,
+            sponsor: process.env.NEXT_PUBLIC_SPONSOR_GAS === "true",
+          });
+          txHash = result.hash;
+          setPendingTxHash(txHash);
+          setPaymentSubmitted(true);
+        }
+        setStep("confirming");
       }
-
-      await updateRequestStatus(request.id, "paid", newTx.id);
+      const newTx = await transferMoney({
+        groupId: group.id,
+        toAddress: request.fromAddress,
+        amountNgn: request.amountNgn,
+        note: request.note,
+        requestId: request.id,
+        txHash,
+      });
 
       setTransaction(newTx);
       setStep("success");
@@ -106,6 +120,8 @@ export function SettleRequestModal({
     setStep("confirm");
     setTransaction(null);
     setError("");
+    setPendingTxHash(null);
+    setPaymentSubmitted(false);
     onClose();
   };
 
@@ -114,11 +130,13 @@ export function SettleRequestModal({
       setStep("confirm");
       setTransaction(null);
       setError("");
+      setPendingTxHash(null);
+      setPaymentSubmitted(false);
     }
   }, [isOpen]);
 
   return (
-    <Sheet isOpen={isOpen} onClose={handleClose} label="Settle up" locked={step === "sending"}>
+    <Sheet isOpen={isOpen} onClose={handleClose} label="Settle up" locked={step === "submitting" || step === "confirming"}>
       {step === "confirm" && (
         <StepPanel stepKey="confirm">
           <SheetHeader title="Settle up" onClose={handleClose} />
@@ -164,11 +182,13 @@ export function SettleRequestModal({
         </StepPanel>
       )}
 
-      {step === "sending" && (
-        <StepPanel stepKey="sending">
+      {(step === "submitting" || step === "confirming") && (
+        <StepPanel stepKey={step}>
           <ProcessingView
-            title={`Paying ${formatNgn(requestAmountNgn)}`}
-            subtitle={`Settling up with ${requesterName}…`}
+            title={step === "submitting" ? "Preparing payment" : "Confirming payment"}
+            subtitle={step === "submitting"
+              ? `Authorizing ${formatNgn(requestAmountNgn)} to ${requesterName}…`
+              : "Submitted to Monad. This can take a little longer during busy periods."}
             from={<Avatar name={myName} seed={currentUserWallet} size="lg" />}
             to={<Avatar name={requesterName} seed={requester?.walletAddress} size="lg" />}
           />
@@ -193,7 +213,12 @@ export function SettleRequestModal({
 
       {step === "error" && (
         <StepPanel stepKey="error">
-          <ErrorView message={error} onRetry={() => setStep("confirm")} onClose={handleClose} />
+          <ErrorView
+            message={error}
+            onRetry={paymentSubmitted ? handlePay : () => setStep("confirm")}
+            onClose={handleClose}
+            fundsMayHaveMoved={paymentSubmitted}
+          />
         </StepPanel>
       )}
     </Sheet>

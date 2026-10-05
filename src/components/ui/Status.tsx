@@ -135,10 +135,12 @@ export function ErrorView({
   message,
   onRetry,
   onClose,
+  fundsMayHaveMoved = false,
 }: {
   message: string;
   onRetry: () => void;
   onClose: () => void;
+  fundsMayHaveMoved?: boolean;
 }) {
   return (
     <div className="px-6 pb-6 pt-4 text-center" role="alert">
@@ -147,7 +149,11 @@ export function ErrorView({
       </div>
       <h3 className="font-display text-2xl font-bold text-ink">That didn&apos;t go through</h3>
       <p className="mt-2 text-sm text-ink-muted">{message}</p>
-      <p className="mt-1 text-sm text-ink-muted">No money has left your balance.</p>
+      <p className="mt-1 text-sm text-ink-muted">
+        {fundsMayHaveMoved
+          ? "Your payment was submitted. Retry to check its confirmation — Settle will not send it twice."
+          : "No money has left your balance."}
+      </p>
       <div className="mt-6 space-y-3">
         <button type="button" onClick={onRetry} className="btn-primary">
           Try again
