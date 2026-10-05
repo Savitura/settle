@@ -2,33 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Settle is a light, warm UI. We deliberately don't flip to dark mode until
+   every surface has a dark variant — half-dark screens are unreadable. */
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 250, 250, 250;
-  --background-end-rgb: 255, 255, 255;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 10, 10, 10;
-    --background-end-rgb: 20, 20, 20;
-  }
+html {
+  background: #f7f7e9;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  @apply bg-cream font-sans text-ink antialiased;
   min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  /* Primary money action — big, bright, tactile */
+  .btn-primary {
+    @apply inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary-500 px-6 py-4 font-display text-base font-semibold text-ink shadow-glow active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600 disabled:shadow-none disabled:active:scale-100;
+  }
+  .btn-coral {
+    @apply inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-coral-400 to-coral-500 px-6 py-4 font-display text-base font-semibold text-white shadow-glow-coral transition-all duration-150 hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-600 disabled:shadow-none;
+  }
+  .btn-ghost {
+    @apply inline-flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-6 py-3.5 text-sm font-semibold text-ink-soft hover:bg-ink/[0.04] active:scale-[0.98];
+  }
+  .card {
+    @apply rounded-[28px] bg-white p-5 shadow-card ring-1 ring-ink/10;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted;
+  }
+  .focus-ring {
+    @apply focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300/60;
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
   }
 }

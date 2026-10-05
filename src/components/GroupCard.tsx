@@ -2,65 +2,62 @@
 
 import { Group } from "@/lib/types";
 import { formatNgn, usdcToNgn } from "@/lib/currency";
+import { Avatar, memberName } from "./ui/Avatar";
+import { ChevronRightIcon } from "./ui/Icons";
 
 interface GroupCardProps {
   group: Group;
   onClick: () => void;
   currentUserWallet: string;
+  index?: number;
 }
 
-export function GroupCard({ group, onClick, currentUserWallet }: GroupCardProps) {
+export function GroupCard({ group, onClick, currentUserWallet, index = 0 }: GroupCardProps) {
   const currentMember = group.members.find(
     (m) => m.walletAddress.toLowerCase() === currentUserWallet.toLowerCase()
   );
 
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="w-full rounded-xl border border-gray-200 bg-white p-4 text-left transition-shadow hover:shadow-md"
+      style={{ animationDelay: `${index * 70}ms` }}
+      className="focus-ring card group w-full animate-rise-in text-left hover:bg-[#fcfcf4] active:scale-[0.99]"
     >
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900">{group.name}</h3>
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-          {group.members.length} member{group.members.length !== 1 ? "s" : ""}
-        </span>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex -space-x-3">
+          {group.members.map((member, idx) => (
+            <div key={member.id} style={{ zIndex: group.members.length - idx }}>
+              <Avatar name={memberName(member)} seed={member.walletAddress} size="md" ring />
+            </div>
+          ))}
+          {group.members.length < 3 && (
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-ink/15 bg-cream text-lg font-semibold text-ink-muted ring-[3px] ring-white">
+              +
+            </div>
+          )}
+        </div>
+        <ChevronRightIcon className="text-ink-muted transition-transform group-hover:translate-x-0.5" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <p className="text-xs text-gray-500">Group Total</p>
-          <p className="text-lg font-semibold text-gray-900">
+      <h3 className="mt-4 font-display text-xl font-bold text-ink">{group.name}</h3>
+      <p className="text-sm text-ink-muted">
+        {group.members.length} member{group.members.length !== 1 ? "s" : ""}
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-cream px-3 py-2.5">
+          <p className="text-xs font-medium text-ink-muted">Wallet total</p>
+          <p className="tabular font-display text-lg font-bold text-ink">
             {formatNgn(usdcToNgn(parseFloat(group.totalBalance.usdc)))}
           </p>
         </div>
-        <div>
-          <p className="text-xs text-gray-500">Your Balance</p>
-          <p className="text-lg font-semibold text-primary-600">
+        <div className="rounded-2xl bg-primary-50 px-3 py-2.5">
+          <p className="text-xs font-medium text-primary-800">Your share</p>
+          <p className="tabular font-display text-lg font-bold text-primary-700">
             {formatNgn(usdcToNgn(parseFloat(currentMember?.balance.usdc || "0")))}
           </p>
         </div>
-      </div>
-
-      <div className="mt-3 flex -space-x-2">
-        {group.members.map((member, idx) => (
-          <div
-            key={member.id}
-            className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-primary-400 to-primary-600 text-xs font-medium text-white"
-            title={
-              member.displayName ||
-              member.email ||
-              `${member.walletAddress.slice(0, 6)}...`
-            }
-            style={{ zIndex: group.members.length - idx }}
-          >
-            {(member.displayName?.[0] || member.email?.[0] || "?").toUpperCase()}
-          </div>
-        ))}
-        {group.members.length < 3 && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-dashed border-gray-300 bg-gray-50 text-xs text-gray-400">
-            +
-          </div>
-        )}
       </div>
     </button>
   );

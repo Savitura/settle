@@ -2,13 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, or, sql, desc } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db/connection";
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-}
+import { ApiError, apiErrorResponse, authenticateRequest, sameAddress } from "@/lib/server/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request);
     const { searchParams } = new URL(request.url);
     const groupId = searchParams.get("groupId");
     const walletAddress = searchParams.get("wallet");
@@ -20,10 +18,17 @@ export async function GET(request: NextRequest) {
       const tx = await db.query.transactions.findFirst({
         where: eq(schema.transactions.txHash, txHash),
       });
+      if (tx && !sameAddress(tx.fromAddress, auth.walletAddress) && !sameAddress(tx.toAddress, auth.walletAddress)) {
+        throw new ApiError(403, "You cannot view this transaction");
+      }
       return NextResponse.json({ transaction: tx || null });
     }
 
     if (groupId) {
+      const member = await db.query.groupMembers.findFirst({
+        where: sql`${schema.groupMembers.groupId} = ${groupId} AND LOWER(${schema.groupMembers.walletAddress}) = LOWER(${auth.walletAddress})`,
+      });
+      if (!member) throw new ApiError(403, "You are not a member of this family wallet");
       const transactions = await db.query.transactions.findMany({
         where: eq(schema.transactions.groupId, groupId),
         orderBy: [desc(schema.transactions.createdAt)],
@@ -39,8 +44,8 @@ export async function GET(request: NextRequest) {
     if (walletAddress) {
       const transactions = await db.query.transactions.findMany({
         where: or(
-          sql`LOWER(${schema.transactions.fromAddress}) = LOWER(${walletAddress})`,
-          sql`LOWER(${schema.transactions.toAddress}) = LOWER(${walletAddress})`
+          sql`LOWER(${schema.transactions.fromAddress}) = LOWER(${auth.walletAddress})`,
+          sql`LOWER(${schema.transactions.toAddress}) = LOWER(${auth.walletAddress})`
         ),
         orderBy: [desc(schema.transactions.createdAt)],
       });
@@ -57,64 +62,15 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
-    console.error("Error fetching transactions:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch transactions" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to fetch transactions");
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { groupId, type, fromAddress, toAddress, amountUsdc, amountNgn, txHash, status, note } = body;
-
-    if (!groupId || !type || !fromAddress || !toAddress || !amountUsdc || !amountNgn || !txHash || !status) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    const db = getDb();
-    const id = generateId();
-    const now = new Date();
-
-    await db.insert(schema.transactions).values({
-      id,
-      groupId,
-      type,
-      fromAddress,
-      toAddress,
-      amountUsdc,
-      amountNgn,
-      txHash,
-      status,
-      note: note || null,
-      createdAt: now,
-    });
-
-    return NextResponse.json({
-      transaction: {
-        id,
-        groupId,
-        type,
-        fromAddress,
-        toAddress,
-        amountUsdc,
-        amountNgn,
-        txHash,
-        status,
-        note: note || null,
-        createdAt: now.toISOString(),
-      },
-    });
+    await authenticateRequest(request);
+    return NextResponse.json({ error: "Use the protected transfer endpoint" }, { status: 405 });
   } catch (error) {
-    console.error("Error creating transaction:", error);
-    return NextResponse.json(
-      { error: "Failed to create transaction" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Authentication failed");
   }
 }

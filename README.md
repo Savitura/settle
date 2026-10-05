@@ -122,6 +122,7 @@ Edit `.env` with your configuration:
 ```bash
 # Required: Get your Privy App ID from https://dashboard.privy.io
 NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id-here
+PRIVY_APP_SECRET=your-privy-app-secret-here
 
 # Required: Neon Postgres connection string from https://console.neon.tech
 DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
@@ -129,8 +130,28 @@ DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 # Monad Testnet (defaults provided)
 NEXT_PUBLIC_MONAD_CHAIN_ID=10143
 NEXT_PUBLIC_MONAD_RPC_URL=https://testnet-rpc.monad.xyz
+MONAD_RPC_URL=https://your-primary-monad-rpc.example
+MONAD_RPC_FALLBACK_URLS=https://testnet-rpc.monad.xyz
 NEXT_PUBLIC_MONAD_BLOCK_EXPLORER=https://testnet-explorer.monad.xyz
+NEXT_PUBLIC_USDC_CONTRACT_ADDRESS=0x_your_usdc_contract
+NEXT_PUBLIC_NGN_PER_USDC=1580
+NGN_PER_USDC=1580
+NEXT_PUBLIC_SPONSOR_GAS=true
+ENABLE_TESTNET_FAUCET=false
+NEXT_PUBLIC_ENABLE_TESTNET_FAUCET=false
+TESTNET_FAUCET_PRIVATE_KEY=0x_your_testnet_only_private_key
+TESTNET_FAUCET_USDC_AMOUNT=25
+ENABLE_DEMO_MODE=false
+NEXT_PUBLIC_ENABLE_DEMO_MODE=false
 ```
+
+Production mode fails closed: API calls require a verified Privy access token, sends require a confirmed USDC transfer, and direct balance mutation/demo imports are disabled. Run `npm run db:migrate` after upgrading so transfer protection, group roles, notifications, lifecycle metadata and audit records are applied.
+
+For the gasless hackathon flow, enable gas sponsorship for Monad in the Privy dashboard and set `NEXT_PUBLIC_SPONSOR_GAS=true`. The app then submits USDC transfers through Privy's sponsored transaction API and labels the network fee as covered by Settle. Configure `MONAD_RPC_URL` with a dedicated provider endpoint and list comma-separated backups in `MONAD_RPC_FALLBACK_URLS`; server-side balance reads and receipt verification automatically fail over.
+
+The optional testnet faucet is authenticated, capped at 100 USDC per claim, and limited to one successful claim per wallet. Keep `ENABLE_TESTNET_FAUCET=false` unless `TESTNET_FAUCET_PRIVATE_KEY` belongs to a testnet-only wallet holding the configured demo USDC. Apply the faucet claim migration before enabling it.
+
+The NGN quote is configuration-driven but is not yet a live FX feed. Before handling customer funds, replace it with a regulated, expiring quote source and complete the required licensing, KYC/AML, transaction-monitoring, reconciliation and fiat off-ramp integrations.
 
 ### Database Setup
 
@@ -277,7 +298,11 @@ npm run typecheck  # Run TypeScript type check
 - **Hide-crypto UX**: All primary flows use Naira (₦) amounts. Crypto terminology only appears in footer disclaimers or demo mode labels.
 - **Demo rate**: ≈ $1 = ₦1,580 (static mock rate for demo purposes)
 - **Max 3 members**: Per MVP requirements, family wallets cap at 3 members.
-- **API authentication**: Write APIs are currently unauthenticated (wallet address passed from client). Production would require proper auth middleware.
+- **API authentication**: API callers are verified with Privy server tokens; group and transaction access is checked against the authenticated embedded wallet.
+- **Family controls**: Owners can rotate invite codes and remove members with settled balances. Members can leave after settling their balance. These actions are recorded in the audit log.
+- **Notifications**: Requests, transfers and membership changes produce in-app notifications. Email, SMS, WhatsApp and push delivery still require external providers.
+- **Operations**: `GET /api/operations` exposes counts, recent audit activity and failed transactions only to wallets listed in `ADMIN_WALLETS`.
+- **Security**: APIs have basic per-instance rate limiting, production responses omit framework branding, and global anti-sniffing, anti-framing, permissions and referrer headers are enabled. Distributed rate limiting should replace the in-memory limiter when running across multiple server instances.
 
 ---
 

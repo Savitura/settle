@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db/connection";
+import { apiErrorResponse, authenticateRequest } from "@/lib/server/auth";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -9,8 +10,10 @@ function generateId(): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request);
     const body = await request.json();
-    const { inviteCode, walletAddress, displayName, email, phone } = body;
+    const { inviteCode, displayName, email, phone } = body;
+    const walletAddress = auth.walletAddress;
 
     if (!inviteCode || !walletAddress) {
       return NextResponse.json(
@@ -80,6 +83,7 @@ export async function POST(request: NextRequest) {
       phone: phone || null,
       joinedAt: now,
       balanceUsdc: "0",
+      role: "member",
     });
 
     const updatedMembers = [...members, {
@@ -115,10 +119,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error joining group:", error);
-    return NextResponse.json(
-      { error: "Failed to join group" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to join group");
   }
 }

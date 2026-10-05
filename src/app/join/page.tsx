@@ -6,6 +6,7 @@ import { usePrivy, PrivyProvider } from "@privy-io/react-auth";
 
 import { monadTestnet } from "@/lib/monad";
 import { JoinGroupModal } from "@/components/JoinGroupModal";
+import { LoadingScreen } from "@/components/AppShell";
 
 function JoinContent() {
   const searchParams = useSearchParams();
@@ -15,38 +16,36 @@ function JoinContent() {
   const { ready, authenticated, login, user } = usePrivy();
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-pulse text-gray-500">Loading...</div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!authenticated) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-green-50 to-white px-4">
-        <div className="w-full max-w-md space-y-6 text-center">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-              Join Family Wallet
-            </h1>
-            <p className="mt-2 text-gray-600">
-              Sign in to join with code: <span className="font-mono font-bold">{code}</span>
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-primary-950 px-5 text-white">
+        <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 animate-float rounded-full bg-primary-500/50 blur-3xl" />
+        <div className="pointer-events-none absolute -right-20 bottom-20 h-72 w-72 animate-float rounded-full bg-coral-500/40 blur-3xl [animation-delay:-3s]" />
+        <div className="relative w-full max-w-md animate-rise-in text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.14em] text-primary-200">You&apos;re invited</p>
+          <h1 className="mt-2 font-display text-4xl font-extrabold tracking-tight">Join your family wallet</h1>
+          {code && (
+            <p className="mx-auto mt-6 w-fit rounded-2xl bg-white/10 px-5 py-3 font-mono text-3xl font-bold tracking-[0.3em] ring-1 ring-white/20">
+              {code}
             </p>
-          </div>
-
+          )}
           <button
+            type="button"
             onClick={login}
-            className="w-full rounded-lg bg-primary-600 px-6 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
+            className="focus-ring mt-8 w-full rounded-2xl bg-white py-4 font-display text-lg font-bold text-primary-800 shadow-xl transition-all hover:-translate-y-0.5 active:scale-[0.98]"
           >
-            Sign In to Join
+            Sign in to join
           </button>
-
+          <p className="mt-3 text-sm text-white/70">Email or phone number — no passwords</p>
           <button
+            type="button"
             onClick={() => router.push("/")}
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="mt-6 text-sm font-semibold text-white/70 hover:text-white"
           >
-            Go to Home
+            Go to home
           </button>
         </div>
       </div>
@@ -66,7 +65,7 @@ function JoinContent() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-cream p-4">
       <JoinGroupModal
         isOpen={true}
         onClose={handleClose}
@@ -83,11 +82,7 @@ function JoinContent() {
 function JoinPageWrapper() {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="animate-pulse text-gray-500">Loading...</div>
-        </div>
-      }
+      fallback={<LoadingScreen />}
     >
       <JoinContent />
     </Suspense>
@@ -116,10 +111,10 @@ export default function JoinPage() {
     <PrivyProvider
       appId={appId}
       config={{
-        loginMethods: ["email", "sms"],
+        loginMethods: ["email", "sms", "google", "passkey"],
         appearance: {
           theme: "light",
-          accentColor: "#22c55e",
+          accentColor: "#04955c",
           logo: undefined,
         },
         embeddedWallets: {

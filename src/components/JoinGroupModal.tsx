@@ -4,6 +4,8 @@ import { useState } from "react";
 
 import { getGroupByInviteCode, joinGroup } from "@/lib/db";
 import { Group } from "@/lib/types";
+import { Sheet, SheetHeader } from "./ui/Sheet";
+import { Avatar } from "./ui/Avatar";
 
 interface JoinGroupModalProps {
   isOpen: boolean;
@@ -30,8 +32,6 @@ export function JoinGroupModal({
     name: string;
     memberCount: number;
   } | null>(null);
-
-  if (!isOpen) return null;
 
   const handleLookup = async () => {
     if (!code.trim()) return;
@@ -84,97 +84,54 @@ export function JoinGroupModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Join Family Wallet
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div className="mb-4">
-          <label
-            htmlFor="inviteCode"
-            className="mb-1 block text-sm font-medium text-gray-700"
-          >
-            Invite Code
-          </label>
-          <input
-            type="text"
-            id="inviteCode"
-            value={code}
-            onChange={(e) => handleCodeChange(e.target.value)}
-            placeholder="Enter 6-character code"
-            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-center font-mono text-xl font-bold uppercase tracking-widest text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-            maxLength={6}
-            autoFocus
-          />
-        </div>
+    <Sheet isOpen={isOpen} onClose={onClose} label="Join a family wallet">
+      <SheetHeader title="Join a family wallet" onClose={onClose} />
+      <div className="px-5 pb-5 pt-2">
+        <label htmlFor="inviteCode" className="eyebrow mb-2 block">
+          Invite code
+        </label>
+        <input
+          type="text"
+          id="inviteCode"
+          value={code}
+          onChange={(e) => handleCodeChange(e.target.value)}
+          placeholder="ABC123"
+          autoComplete="off"
+          className="w-full rounded-2xl border-2 border-transparent bg-cream px-4 py-4 text-center font-mono text-3xl font-bold uppercase tracking-[0.3em] text-ink placeholder:text-ink/20 focus:border-primary-300 focus:outline-none"
+          maxLength={6}
+        />
+        <p className="mt-2 text-center text-sm text-ink-muted">Ask a family member for their 6-character code</p>
 
         {groupPreview && (
-          <div className="mb-4 rounded-lg bg-green-50 p-4">
-            <p className="text-sm font-medium text-green-800">
-              {groupPreview.name}
-            </p>
-            <p className="text-xs text-green-600">
-              {groupPreview.memberCount} member
-              {groupPreview.memberCount !== 1 ? "s" : ""}
-            </p>
+          <div className="mt-5 flex animate-rise-in items-center gap-3 rounded-2xl bg-primary-50 p-4 ring-1 ring-primary-200">
+            <Avatar name={groupPreview.name} size="md" tone={0} />
+            <div>
+              <p className="font-display text-lg font-bold text-ink">{groupPreview.name}</p>
+              <p className="text-sm text-primary-800">
+                {groupPreview.memberCount} member{groupPreview.memberCount !== 1 ? "s" : ""} waiting for you
+              </p>
+            </div>
           </div>
         )}
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+          <div className="mt-4 rounded-2xl bg-coral-50 p-3 text-sm font-medium text-coral-700" role="alert">
             {error}
           </div>
         )}
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Cancel
-          </button>
+        <div className="mt-6">
           {groupPreview ? (
-            <button
-              type="button"
-              onClick={handleJoin}
-              className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-            >
-              Join Wallet
+            <button type="button" onClick={handleJoin} className="btn-primary">
+              Join {groupPreview.name}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleLookup}
-              disabled={code.length < 6}
-              className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Look Up
+            <button type="button" onClick={handleLookup} disabled={code.length < 6} className="btn-primary">
+              Find wallet
             </button>
           )}
         </div>
       </div>
-    </div>
+    </Sheet>
   );
 }

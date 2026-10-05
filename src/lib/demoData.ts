@@ -165,6 +165,7 @@ function buildDemoData(
       email: index === 0 ? (currentUserEmail || member.email) : member.email,
       phone: index === 0 ? (currentUserPhone || null) : null,
       joinedAt: new Date(now.getTime() - (30 - index) * 24 * 60 * 60 * 1000).toISOString(),
+      role: index === 0 ? "owner" : "member",
       balance: {
         usdc: member.balanceUsdc,
         usdcFormatted: `$${usdcNum.toFixed(2)}`,

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { createGroup } from "@/lib/db";
 import { Group } from "@/lib/types";
+import { Sheet, SheetHeader } from "./ui/Sheet";
 
 interface CreateGroupModalProps {
   isOpen: boolean;
@@ -24,8 +25,6 @@ export function CreateGroupModal({
 }: CreateGroupModalProps) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,81 +51,49 @@ export function CreateGroupModal({
     }
   };
 
+  const suggestions = ["Family Savings", "Lagos Rent", "School Fees", "Mama's Upkeep"];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Create Family Wallet
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label
-              htmlFor="groupName"
-              className="mb-1 block text-sm font-medium text-gray-700"
-            >
-              Wallet Name
-            </label>
-            <input
-              type="text"
-              id="groupName"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Family Savings, Lagos Rent"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              required
-              maxLength={50}
-              autoFocus
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              You can invite up to 2 more members after creating.
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">
-              {error}
-            </div>
-          )}
-
-          <div className="flex gap-3">
+    <Sheet isOpen={isOpen} onClose={onClose} label="New family wallet">
+      <SheetHeader title="New family wallet" onClose={onClose} />
+      <form onSubmit={handleSubmit} className="px-5 pb-5 pt-2">
+        <label htmlFor="groupName" className="eyebrow mb-2 block">
+          Give it a name
+        </label>
+        <input
+          type="text"
+          id="groupName"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Adeyemi Family"
+          className="w-full rounded-2xl border-2 border-transparent bg-cream px-4 py-4 font-display text-xl font-bold text-ink placeholder:font-sans placeholder:text-base placeholder:font-medium placeholder:text-ink/40 focus:border-primary-300 focus:outline-none"
+          required
+          maxLength={50}
+        />
+        <div className="mt-3 flex flex-wrap gap-2">
+          {suggestions.map((s) => (
             <button
+              key={s}
               type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              onClick={() => setName(s)}
+              className="focus-ring rounded-full border border-ink/10 bg-white px-3 py-1 text-xs font-semibold text-ink-soft transition-all hover:border-primary-300 hover:text-primary-700 active:scale-95"
             >
-              Cancel
+              {s}
             </button>
-            <button
-              type="submit"
-              disabled={!name.trim()}
-              className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Create Wallet
-            </button>
+          ))}
+        </div>
+        <p className="mt-4 text-sm text-ink-muted">You can invite up to 2 more people after creating it.</p>
+
+        {error && (
+          <div className="mt-4 rounded-2xl bg-coral-50 p-3 text-sm font-medium text-coral-700" role="alert">
+            {error}
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        <button type="submit" disabled={!name.trim()} className="btn-primary mt-6">
+          Create wallet
+        </button>
+      </form>
+    </Sheet>
   );
 }

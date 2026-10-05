@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 import {
   seedMockBalances,
   getTransactionsByGroup,
   getRequestsByGroup,
   getPendingRequestsForWallet,
+  manageGroup,
 } from "@/lib/db";
 import { Group, Transaction, MoneyRequest } from "@/lib/types";
 import { formatNgn, usdcToNgn } from "@/lib/currency";
@@ -14,19 +15,32 @@ import { InviteModal } from "./InviteModal";
 import { SendMoneyModal } from "./SendMoneyModal";
 import { RequestMoneyModal } from "./RequestMoneyModal";
 import { SettleRequestModal } from "./SettleRequestModal";
+import { Avatar, memberContact, memberName } from "./ui/Avatar";
+import { IconButton } from "./ui/Sheet";
+import { useCountUp } from "./ui/Status";
+import { BackIcon, InviteIcon, RequestIcon, SendIcon, SettleIcon, SparkIcon } from "./ui/Icons";
+
+export type GroupAction = "send" | "request" | "settle" | "invite";
 
 interface GroupDetailProps {
   group: Group;
   onBack: () => void;
   onRefresh: () => void;
   currentUserWallet: string;
+  /** Open a flow straight away (e.g. from Home quick actions). */
+  initialAction?: GroupAction | null;
+  onActionHandled?: () => void;
 }
+
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 export function GroupDetail({
   group,
   onBack,
   onRefresh,
   currentUserWallet,
+  initialAction,
+  onActionHandled,
 }: GroupDetailProps) {
   const [showInvite, setShowInvite] = useState(false);
   const [showSendMoney, setShowSendMoney] = useState(false);
@@ -35,6 +49,11 @@ export function GroupDetail({
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [requests, setRequests] = useState<MoneyRequest[]>([]);
   const [pendingRequests, setPendingRequests] = useState<MoneyRequest[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [highlightPending, setHighlightPending] = useState(false);
+  const [managementMessage, setManagementMessage] = useState("");
+  const [managing, setManaging] = useState(false);
+  const pendingRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -48,6 +67,8 @@ export function GroupDetail({
       setPendingRequests(pending);
     } catch (error) {
       console.error("Failed to load group data:", error);
+    } finally {
+      setLoaded(true);
     }
   }, [group.id, currentUserWallet]);
 
@@ -55,307 +76,326 @@ export function GroupDetail({
     loadData();
   }, [loadData]);
 
-  const isCreator =
-    group.createdBy.toLowerCase() === currentUserWallet.toLowerCase();
-
-  const currentMember = group.members.find(
-    (m) => m.walletAddress.toLowerCase() === currentUserWallet.toLowerCase()
-  );
+  const isCreator = same(group.createdBy, currentUserWallet);
+  const currentMember = group.members.find((m) => same(m.walletAddress, currentUserWallet));
   const currentBalance = parseFloat(currentMember?.balance.usdc || "0");
+  const groupTotal = parseFloat(group.totalBalance.usdc);
   const canSend = currentBalance > 0;
+  const hasOtherMembers = group.members.length > 1;
+  const canInvite = group.members.length < 3;
+  const outboundOpen = requests.filter(
+    (r) => r.status === "pending" && same(r.fromAddress, currentUserWallet)
+  );
+  const allEven = loaded && pendingRequests.length === 0 && outboundOpen.length === 0 && hasOtherMembers;
+
+  const myBalanceNgn = useCountUp(usdcToNgn(currentBalance));
+  const groupTotalNgn = useCountUp(usdcToNgn(groupTotal));
+
+  const openSettle = useCallback(() => {
+    if (pendingRequests.length === 1) {
+      setSelectedRequest(pendingRequests[0]);
+    } else if (pendingRequests.length > 1) {
+      pendingRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightPending(true);
+      setTimeout(() => setHighlightPending(false), 1200);
+    }
+  }, [pendingRequests]);
+
+  // Run a quick action handed over from the Home screen once data is ready
+  useEffect(() => {
+    if (!initialAction || !loaded) return;
+    if (initialAction === "send" && canSend && hasOtherMembers) setShowSendMoney(true);
+    if (initialAction === "request" && hasOtherMembers) setShowRequestMoney(true);
+    if (initialAction === "settle") openSettle();
+    if (initialAction === "invite" && canInvite) setShowInvite(true);
+    onActionHandled?.();
+  }, [initialAction, loaded, canSend, hasOtherMembers, canInvite, openSettle, onActionHandled]);
 
   const handleSeedBalances = async () => {
     await seedMockBalances(group.id);
     onRefresh();
   };
 
-  const handleSendSuccess = async () => {
+  const refreshAll = async () => {
     onRefresh();
-    const [txs, reqs, pending] = await Promise.all([
-      getTransactionsByGroup(group.id),
-      getRequestsByGroup(group.id),
-      getPendingRequestsForWallet(group.id, currentUserWallet),
-    ]);
-    setTransactions(txs);
-    setRequests(reqs);
-    setPendingRequests(pending);
-  };
-
-  const handleRequestSuccess = async () => {
-    const [reqs, pending] = await Promise.all([
-      getRequestsByGroup(group.id),
-      getPendingRequestsForWallet(group.id, currentUserWallet),
-    ]);
-    setRequests(reqs);
-    setPendingRequests(pending);
+    await loadData();
   };
 
   const handleSettleSuccess = async () => {
-    onRefresh();
-    const [txs, reqs, pending] = await Promise.all([
-      getTransactionsByGroup(group.id),
-      getRequestsByGroup(group.id),
-      getPendingRequestsForWallet(group.id, currentUserWallet),
-    ]);
-    setTransactions(txs);
-    setRequests(reqs);
-    setPendingRequests(pending);
+    await refreshAll();
     setSelectedRequest(null);
   };
 
-  const hasOtherMembers = group.members.length > 1;
+  const runGroupAction = async (action: "rotate_invite" | "remove_member" | "leave", memberId?: string) => {
+    setManaging(true);
+    setManagementMessage("");
+    try {
+      const result = await manageGroup({ action, groupId: group.id, memberId });
+      if (action === "rotate_invite") setManagementMessage(`New invite code: ${result.inviteCode}`);
+      else if (action === "leave") { onBack(); return; }
+      else setManagementMessage("Member removed");
+      await onRefresh();
+    } catch (error) {
+      setManagementMessage(error instanceof Error ? error.message : "Group action failed");
+    } finally {
+      setManaging(false);
+    }
+  };
+
+  const nameFor = (address: string) =>
+    memberName(group.members.find((m) => same(m.walletAddress, address)));
+
+  const actions: Array<{
+    key: GroupAction;
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    disabled: boolean;
+    style: string;
+    badge?: number;
+  }> = [
+    {
+      key: "send",
+      label: "Send",
+      icon: <SendIcon size={24} />,
+      onClick: () => setShowSendMoney(true),
+      disabled: !canSend || !hasOtherMembers,
+      style: "from-primary-400 to-primary-600 shadow-glow",
+    },
+    {
+      key: "request",
+      label: "Request",
+      icon: <RequestIcon size={24} />,
+      onClick: () => setShowRequestMoney(true),
+      disabled: !hasOtherMembers,
+      style: "from-coral-300 to-coral-500 shadow-glow-coral",
+    },
+    {
+      key: "settle",
+      label: "Settle up",
+      icon: <SettleIcon size={24} />,
+      onClick: openSettle,
+      disabled: pendingRequests.length === 0,
+      style: "from-sun-300 to-sun-500 shadow-[0_18px_40px_-16px_rgba(249,168,6,0.6)]",
+      badge: pendingRequests.length,
+    },
+    {
+      key: "invite",
+      label: "Invite",
+      icon: <InviteIcon size={24} />,
+      onClick: () => setShowInvite(true),
+      disabled: !canInvite,
+      style: "from-fuchsia-400 to-fuchsia-600 shadow-[0_18px_40px_-16px_rgba(192,38,211,0.5)]",
+    },
+  ];
+
+  let helper: string | null = null;
+  if (!hasOtherMembers) helper = "Invite family to start sending and requesting";
+  else if (!canSend) helper = "Add demo balance below to start sending";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-        </button>
-        <h2 className="text-lg font-semibold text-gray-900">{group.name}</h2>
+    <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <IconButton label="Back to wallets" onClick={onBack} className="bg-white shadow-card">
+          <BackIcon />
+        </IconButton>
+        <h2 className="flex-1 truncate font-display text-2xl font-bold text-ink">{group.name}</h2>
       </div>
 
-      <div className="rounded-xl bg-gradient-to-br from-primary-600 to-primary-700 p-6 text-white shadow-lg">
-        <p className="text-sm font-medium text-primary-100">Group Balance</p>
-        <p className="mt-1 text-3xl font-bold">
-          {formatNgn(usdcToNgn(parseFloat(group.totalBalance.usdc)))}
-        </p>
-
-        <div className="mt-4 flex items-center justify-between text-xs text-primary-200">
-          <span>
-            {group.members.length} member{group.members.length !== 1 ? "s" : ""}
-          </span>
-          <span className="rounded bg-primary-500/30 px-2 py-0.5">
-            {parseFloat(group.totalBalance.usdc) === 0 ? "Demo balances available" : ""}
-          </span>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-medium text-gray-900">Members</h3>
-          {group.members.length < 3 && (
-            <button
-              onClick={() => setShowInvite(true)}
-              className="rounded-lg bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-100"
-            >
-              Invite
-            </button>
-          )}
-        </div>
-
-        <div className="space-y-3">
-          {group.members.map((member) => {
-            const isCurrentUser =
-              member.walletAddress.toLowerCase() ===
-              currentUserWallet.toLowerCase();
-            const displayName =
-              member.displayName ||
-              member.email ||
-              `${member.walletAddress.slice(0, 6)}...${member.walletAddress.slice(-4)}`;
-
-            return (
-              <div
-                key={member.id}
-                className="flex items-center justify-between rounded-lg bg-gray-50 p-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-sm font-medium text-white">
-                    {(
-                      member.displayName?.[0] ||
-                      member.email?.[0] ||
-                      "?"
-                    ).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {displayName}
-                      {isCurrentUser && (
-                        <span className="ml-1 text-xs text-gray-500">(you)</span>
-                      )}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {member.walletAddress.slice(0, 10)}...
-                      {member.walletAddress.slice(-6)}
-                    </p>
-                  </div>
+      {/* Hero balance */}
+      <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-primary-500 via-primary-600 to-primary-900 p-6 text-white shadow-glow">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 animate-float rounded-full bg-sun-300/35 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 animate-float rounded-full bg-coral-400/30 blur-3xl [animation-delay:-4s]" />
+        <div className="relative">
+          <p className="text-sm font-semibold text-primary-100">Your balance</p>
+          <p className="tabular mt-1 font-display text-[44px] font-extrabold leading-none tracking-tight">
+            {formatNgn(myBalanceNgn)}
+          </p>
+          <div className="mt-5 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-medium text-primary-100">Whole wallet</p>
+              <p className="tabular font-display text-lg font-bold">{formatNgn(groupTotalNgn)}</p>
+            </div>
+            <div className="flex -space-x-2.5">
+              {group.members.map((m, i) => (
+                <div key={m.id} style={{ zIndex: 10 - i }}>
+                  <Avatar name={memberName(m)} seed={m.walletAddress} size="sm" ring />
                 </div>
-                <div className="text-right">
-                  <p className="font-semibold text-gray-900">
-                    {formatNgn(usdcToNgn(parseFloat(member.balance.usdc)))}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {group.members.length < 3 && (
-          <p className="mt-3 text-center text-xs text-gray-400">
-            {3 - group.members.length} spot{3 - group.members.length !== 1 ? "s" : ""}{" "}
-            remaining
-          </p>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <h3 className="mb-3 font-medium text-gray-900">Quick Actions</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => setShowSendMoney(true)}
-            disabled={!canSend}
-            className={`rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-              canSend
-                ? "border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100"
-                : "border border-gray-200 bg-gray-50 text-gray-700 opacity-50"
-            } disabled:cursor-not-allowed`}
-          >
-            Send Money
-          </button>
-          <button
-            onClick={() => setShowRequestMoney(true)}
-            disabled={!hasOtherMembers}
-            className={`rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-              hasOtherMembers
-                ? "border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                : "border border-gray-200 bg-gray-50 text-gray-700 opacity-50"
-            } disabled:cursor-not-allowed`}
-          >
-            Request
-          </button>
-          <button
-            onClick={() => {
-              if (pendingRequests.length > 0) {
-                setSelectedRequest(pendingRequests[0]);
-              }
-            }}
-            disabled={pendingRequests.length === 0}
-            className={`rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-              pendingRequests.length > 0
-                ? "border border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
-                : "border border-gray-200 bg-gray-50 text-gray-700 opacity-50"
-            } disabled:cursor-not-allowed`}
-          >
-            Settle Up{pendingRequests.length > 0 ? ` (${pendingRequests.length})` : ""}
-          </button>
-          <button
-            onClick={() => setShowInvite(true)}
-            disabled={group.members.length >= 3}
-            className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-sm font-medium text-primary-700 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Invite
-          </button>
-        </div>
-        {!canSend && !hasOtherMembers && (
-          <p className="mt-3 text-center text-xs text-amber-600">
-            Invite members and add demo balance to get started
-          </p>
-        )}
-        {!canSend && hasOtherMembers && (
-          <p className="mt-3 text-center text-xs text-amber-600">
-            Add demo balance below to enable Send
-          </p>
-        )}
-        {/* TODO: "You're all even" currently only checks inbound pending requests (pendingRequests).
-            To be fully accurate, should also check outbound open requests the current user sent. */}
-        {pendingRequests.length === 0 && hasOtherMembers && (
-          <div className="mt-4 rounded-lg bg-green-50 p-3 text-center">
-            <p className="text-sm font-medium text-green-700">You&apos;re all even</p>
-            <p className="mt-0.5 text-xs text-green-600">No open balances in this group</p>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      </section>
 
+      {/* Actions */}
+      <section aria-label="Quick actions">
+        <div className="grid grid-cols-4 gap-2">
+          {actions.map((a, i) => (
+            <button
+              key={a.key}
+              type="button"
+              onClick={a.onClick}
+              disabled={a.disabled}
+              style={{ animationDelay: `${80 + i * 60}ms` }}
+              className="focus-ring group flex animate-rise-in flex-col items-center gap-2 rounded-2xl py-1 disabled:cursor-not-allowed"
+            >
+              <span
+                className={`relative flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br text-white transition-all group-hover:-translate-y-0.5 group-active:scale-90 group-disabled:translate-y-0 group-disabled:scale-100 group-disabled:from-gray-200 group-disabled:to-gray-200 group-disabled:text-gray-500 group-disabled:shadow-none ${a.style}`}
+              >
+                {a.icon}
+                {!!a.badge && (
+                  <span className="absolute -right-1 -top-1 flex h-6 min-w-6 animate-pop items-center justify-center rounded-full border-2 border-cream bg-coral-500 px-1.5 text-xs font-bold text-white">
+                    {a.badge}
+                  </span>
+                )}
+              </span>
+              <span className="text-sm font-semibold text-ink-soft group-disabled:text-ink-muted">{a.label}</span>
+            </button>
+          ))}
+        </div>
+        {helper && <p className="mt-3 text-center text-sm font-medium text-ink-muted">{helper}</p>}
+      </section>
+
+      {/* Waiting on you */}
       {pendingRequests.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <h3 className="mb-3 font-medium text-amber-800">
-            Pending Requests ({pendingRequests.length})
+        <section
+          ref={pendingRef}
+          className={`animate-rise-in rounded-[28px] bg-gradient-to-br from-coral-50 to-sun-100 p-5 ring-1 ring-coral-200 transition-shadow ${
+            highlightPending ? "ring-4 ring-coral-400" : ""
+          }`}
+        >
+          <h3 className="flex items-center gap-2 font-display text-lg font-bold text-coral-800">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-coral-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-coral-500" />
+            </span>
+            Waiting on you
           </h3>
-          <div className="space-y-3">
+          <div className="mt-3 space-y-2.5">
             {pendingRequests.map((req) => {
-              const requester = group.members.find(
-                (m) => m.walletAddress.toLowerCase() === req.fromAddress.toLowerCase()
-              );
-              const requesterName =
-                requester?.displayName ||
-                requester?.email ||
-                `${req.fromAddress.slice(0, 6)}...${req.fromAddress.slice(-4)}`;
-
+              const name = nameFor(req.fromAddress);
               return (
                 <button
+                  type="button"
                   key={req.id}
                   onClick={() => setSelectedRequest(req)}
-                  className="flex w-full items-center justify-between rounded-lg bg-white p-3 text-left transition-colors hover:bg-amber-100"
+                  className="focus-ring flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-card transition-all hover:-translate-y-0.5 active:scale-[0.99]"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-                      <svg
-                        className="h-5 w-5 text-amber-600"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                        />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {requesterName} requested {formatNgn(parseFloat(req.amountNgn))}
-                      </p>
-                      {req.note && (
-                        <p className="text-xs text-gray-500">{req.note}</p>
-                      )}
-                    </div>
+                  <Avatar name={name} seed={req.fromAddress} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-ink">
+                      {name} asked for <span className="tabular">{formatNgn(parseFloat(req.amountNgn))}</span>
+                    </p>
+                    {req.note && <p className="truncate text-xs text-ink-muted">{req.note}</p>}
                   </div>
-                  <span className="text-sm font-medium text-amber-600">Pay</span>
+                  <span className="rounded-full bg-gradient-to-r from-primary-500 to-primary-600 px-4 py-2 text-sm font-bold text-white">
+                    Pay
+                  </span>
                 </button>
               );
             })}
           </div>
+        </section>
+      )}
+
+      {allEven && (
+        <div className="flex animate-rise-in items-center gap-3 rounded-[28px] bg-primary-50 p-4 ring-1 ring-primary-200">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-white">
+            <SettleIcon size={20} />
+          </span>
+          <div>
+            <p className="font-display font-bold text-primary-900">You&apos;re all even</p>
+            <p className="text-sm text-primary-800">Nobody owes anybody in this wallet</p>
+          </div>
         </div>
       )}
 
-      {isCreator && parseFloat(group.totalBalance.usdc) === 0 && (
-        <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4">
-          <p className="mb-2 text-sm font-medium text-amber-800">Demo Mode</p>
-          <p className="mb-3 text-xs text-amber-700">
-            Add demo balances to try sending money within your group.
-          </p>
-          <button
-            onClick={handleSeedBalances}
-            className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
-          >
-            Add Demo Balance
+      {/* Demo balance */}
+      {isCreator && groupTotal === 0 && (
+        <section className="relative overflow-hidden rounded-[28px] border-2 border-dashed border-sun-400 bg-sun-100/60 p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sun-300 to-sun-500 text-ink">
+              <SparkIcon size={20} />
+            </span>
+            <div className="flex-1">
+              <p className="font-display text-lg font-bold text-ink">Try it with demo money</p>
+              <p className="mt-0.5 text-sm text-ink-soft">Top up everyone in this wallet so you can send and settle.</p>
+            </div>
+          </div>
+          <button type="button" onClick={handleSeedBalances} className="btn-primary mt-4">
+            Add demo balance
           </button>
-          <p className="mt-2 text-center text-xs text-amber-600">
-            Demo uses test dollars under the hood.
-          </p>
-        </div>
+        </section>
       )}
+
+      {/* Members */}
+      <section className="card">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-display text-lg font-bold text-ink">Family</h3>
+          {canInvite && (
+            <button
+              type="button"
+              onClick={() => setShowInvite(true)}
+              className="focus-ring rounded-full bg-fuchsia-50 px-3.5 py-1.5 text-sm font-semibold text-fuchsia-700 transition-colors hover:bg-fuchsia-100"
+            >
+              + Invite
+            </button>
+          )}
+        </div>
+        <ul className="divide-y divide-ink/5">
+          {group.members.map((member) => {
+            const isMe = same(member.walletAddress, currentUserWallet);
+            const name = memberName(member);
+            const contact = memberContact(member);
+            return (
+              <li key={member.id} className="flex items-center gap-3 py-3">
+                <Avatar name={name} seed={member.walletAddress} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-ink">
+                    {name}
+                    {isMe && (
+                      <span className="ml-2 rounded-full bg-primary-100 px-2 py-0.5 text-xs font-bold text-primary-800">
+                        You
+                      </span>
+                    )}
+                  </p>
+                  {contact && <p className="truncate text-xs text-ink-muted">{contact}</p>}
+                </div>
+                <p className="tabular font-display font-bold text-ink">
+                  {formatNgn(usdcToNgn(parseFloat(member.balance.usdc)))}
+                </p>
+                {isCreator && !isMe && parseFloat(member.balance.usdc) === 0 && (
+                  <button type="button" disabled={managing} onClick={() => runGroupAction("remove_member", member.id)} className="text-xs font-bold text-coral-700 disabled:opacity-50">
+                    Remove
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {canInvite && (
+          <p className="mt-2 text-center text-sm text-ink-muted">
+            {3 - group.members.length} spot{3 - group.members.length !== 1 ? "s" : ""} left
+          </p>
+        )}
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-ink/10 pt-4">
+          {isCreator ? (
+            <button type="button" disabled={managing} onClick={() => runGroupAction("rotate_invite")} className="rounded-full border border-ink/15 px-3 py-2 text-xs font-bold text-ink-soft disabled:opacity-50">
+              Replace invite code
+            </button>
+          ) : (
+            <button type="button" disabled={managing || currentBalance !== 0} onClick={() => runGroupAction("leave")} className="rounded-full border border-coral-200 px-3 py-2 text-xs font-bold text-coral-700 disabled:opacity-50">
+              Leave wallet
+            </button>
+          )}
+          {managementMessage && <p className="w-full text-xs text-ink-muted" role="status">{managementMessage}</p>}
+        </div>
+      </section>
 
       <ActivityFeed
         transactions={transactions}
         requests={requests}
-        group={group}
+        nameFor={nameFor}
         currentUserWallet={currentUserWallet}
       />
 
@@ -371,7 +411,7 @@ export function GroupDetail({
         onClose={() => setShowSendMoney(false)}
         group={group}
         currentUserWallet={currentUserWallet}
-        onSuccess={handleSendSuccess}
+        onSuccess={refreshAll}
       />
 
       <RequestMoneyModal
@@ -379,7 +419,7 @@ export function GroupDetail({
         onClose={() => setShowRequestMoney(false)}
         group={group}
         currentUserWallet={currentUserWallet}
-        onSuccess={handleRequestSuccess}
+        onSuccess={loadData}
       />
 
       {selectedRequest && (
@@ -396,236 +436,144 @@ export function GroupDetail({
   );
 }
 
-interface ActivityItem {
+export interface ActivityItem {
   id: string;
-  type: "send" | "receive" | "request" | "settle" | "request_sent" | "request_received";
+  kind: "out" | "in" | "request";
+  label: string;
   amount: string;
-  otherPartyName: string;
   note?: string;
   status?: string;
   createdAt: string;
+  otherAddress: string;
+  otherName: string;
+}
+
+export function buildActivity(
+  transactions: Transaction[],
+  requests: MoneyRequest[],
+  nameFor: (address: string) => string,
+  currentUserWallet: string
+): ActivityItem[] {
+  const items: ActivityItem[] = [];
+
+  for (const tx of transactions) {
+    const isSender = same(tx.fromAddress, currentUserWallet);
+    const otherAddress = isSender ? tx.toAddress : tx.fromAddress;
+    const otherName = nameFor(otherAddress);
+    let kind: ActivityItem["kind"] = isSender ? "out" : "in";
+    let label = isSender ? `Sent to ${otherName}` : `From ${otherName}`;
+    if (tx.type === "settle") label = isSender ? `Paid ${otherName}` : `${otherName} paid you`;
+    if (tx.type === "request") {
+      kind = "request";
+      label = isSender ? `Asked ${otherName}` : `${otherName} asked you`;
+    }
+    items.push({
+      id: tx.id,
+      kind,
+      label,
+      amount: tx.amountNgn,
+      note: tx.note,
+      createdAt: tx.createdAt,
+      otherAddress,
+      otherName,
+    });
+  }
+
+  for (const req of requests) {
+    if (req.status === "paid") continue;
+    const isRequester = same(req.fromAddress, currentUserWallet);
+    const otherAddress = isRequester ? req.toAddress : req.fromAddress;
+    const otherName = nameFor(otherAddress);
+    items.push({
+      id: `req-${req.id}`,
+      kind: "request",
+      label: isRequester ? `Asked ${otherName}` : `${otherName} asked you`,
+      amount: req.amountNgn,
+      note: req.note,
+      status: req.status,
+      createdAt: req.createdAt,
+      otherAddress,
+      otherName,
+    });
+  }
+
+  return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: "Waiting",
+  declined: "Declined",
+  cancelled: "Cancelled",
+};
+
+export function ActivityList({ items, limit = 10 }: { items: ActivityItem[]; limit?: number }) {
+  return (
+    <ul className="space-y-1">
+      {items.slice(0, limit).map((a, i) => {
+        const tone =
+          a.kind === "in"
+            ? { text: "text-primary-700", chip: "bg-primary-100 text-primary-700", sign: "+", icon: <RequestIcon size={14} /> }
+            : a.kind === "out"
+              ? { text: "text-ink", chip: "bg-ink/5 text-ink-soft", sign: "−", icon: <SendIcon size={14} /> }
+              : { text: "text-coral-700", chip: "bg-coral-100 text-coral-700", sign: "", icon: <SparkIcon size={14} /> };
+        return (
+          <li
+            key={a.id}
+            style={{ animationDelay: `${Math.min(i, 6) * 50}ms` }}
+            className="flex animate-rise-in items-center gap-3 rounded-2xl px-1 py-2.5"
+          >
+            <div className="relative">
+              <Avatar name={a.otherName} seed={a.otherAddress} />
+              <span
+                className={`absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-white ${tone.chip}`}
+              >
+                {tone.icon}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-ink">{a.label}</p>
+              <p className="truncate text-xs text-ink-muted">
+                {new Date(a.createdAt).toLocaleDateString("en-NG", { month: "short", day: "numeric" })}
+                {a.note && ` · ${a.note}`}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className={`tabular font-display font-bold ${tone.text}`}>
+                {tone.sign}
+                {formatNgn(parseFloat(a.amount))}
+              </p>
+              {a.status && STATUS_LABEL[a.status] && (
+                <p className="text-xs font-semibold text-ink-muted">{STATUS_LABEL[a.status]}</p>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 function ActivityFeed({
   transactions,
   requests,
-  group,
+  nameFor,
   currentUserWallet,
 }: {
   transactions: Transaction[];
   requests: MoneyRequest[];
-  group: Group;
+  nameFor: (address: string) => string;
   currentUserWallet: string;
 }) {
-  const activities: ActivityItem[] = [];
-
-  for (const tx of transactions) {
-    const isSender = tx.fromAddress.toLowerCase() === currentUserWallet.toLowerCase();
-    const otherAddress = isSender ? tx.toAddress : tx.fromAddress;
-    const otherMember = group.members.find(
-      (m) => m.walletAddress.toLowerCase() === otherAddress.toLowerCase()
-    );
-    const otherName =
-      otherMember?.displayName ||
-      otherMember?.email ||
-      `${otherAddress.slice(0, 6)}...${otherAddress.slice(-4)}`;
-
-    let activityType: ActivityItem["type"];
-    switch (tx.type) {
-      case "send":
-        activityType = isSender ? "send" : "receive";
-        break;
-      case "settle":
-        activityType = "settle";
-        break;
-      case "request":
-        activityType = isSender ? "request_sent" : "request_received";
-        break;
-      case "receive":
-        activityType = "receive";
-        break;
-      default: {
-        const _exhaustive: never = tx.type;
-        throw new Error(`Unknown transaction type: ${_exhaustive}`);
-      }
-    }
-
-    activities.push({
-      id: tx.id,
-      type: activityType,
-      amount: tx.amountNgn,
-      otherPartyName: otherName,
-      note: tx.note,
-      createdAt: tx.createdAt,
-    });
-  }
-
-  for (const req of requests) {
-    const isRequester = req.fromAddress.toLowerCase() === currentUserWallet.toLowerCase();
-    const otherAddress = isRequester ? req.toAddress : req.fromAddress;
-    const otherMember = group.members.find(
-      (m) => m.walletAddress.toLowerCase() === otherAddress.toLowerCase()
-    );
-    const otherName =
-      otherMember?.displayName ||
-      otherMember?.email ||
-      `${otherAddress.slice(0, 6)}...${otherAddress.slice(-4)}`;
-
-    if (req.status !== "paid") {
-      activities.push({
-        id: `req-${req.id}`,
-        type: isRequester ? "request_sent" : "request_received",
-        amount: req.amountNgn,
-        otherPartyName: otherName,
-        note: req.note,
-        status: req.status,
-        createdAt: req.createdAt,
-      });
-    }
-  }
-
-  activities.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-
-  if (activities.length === 0) {
-    return null;
-  }
-
-  const getActivityLabel = (activity: ActivityItem): string => {
-    switch (activity.type) {
-      case "send":
-        return `Sent to ${activity.otherPartyName}`;
-      case "receive":
-        return `Received from ${activity.otherPartyName}`;
-      case "settle":
-        return `Paid ${activity.otherPartyName}`;
-      case "request_sent":
-        return `Requested from ${activity.otherPartyName}`;
-      case "request_received":
-        return `${activity.otherPartyName} requested`;
-      default:
-        return "";
-    }
-  };
-
-  const getActivityColor = (activity: ActivityItem) => {
-    switch (activity.type) {
-      case "send":
-      case "settle":
-        return { bg: "bg-red-100", text: "text-red-600", sign: "-" };
-      case "receive":
-        return { bg: "bg-green-100", text: "text-green-600", sign: "+" };
-      case "request_sent":
-      case "request_received":
-        return { bg: "bg-amber-100", text: "text-amber-600", sign: "" };
-      default:
-        return { bg: "bg-gray-100", text: "text-gray-600", sign: "" };
-    }
-  };
-
-  const getActivityIcon = (activity: ActivityItem) => {
-    switch (activity.type) {
-      case "send":
-      case "settle":
-        return (
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M7 11l5-5m0 0l5 5m-5-5v12"
-          />
-        );
-      case "receive":
-        return (
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M17 13l-5 5m0 0l-5-5m5 5V6"
-          />
-        );
-      case "request_sent":
-      case "request_received":
-        return (
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        );
-      default:
-        return null;
-    }
-  };
+  const items = buildActivity(transactions, requests, nameFor, currentUserWallet);
+  if (items.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <h3 className="mb-3 font-medium text-gray-900">Activity</h3>
-      <div className="space-y-3">
-        {activities.slice(0, 10).map((activity) => {
-          const colors = getActivityColor(activity);
-          const statusLabel =
-            activity.status === "pending"
-              ? " · Pending"
-              : activity.status === "declined"
-                ? " · Declined"
-                : activity.status === "cancelled"
-                  ? " · Cancelled"
-                  : "";
-
-          return (
-            <div
-              key={activity.id}
-              className="flex items-center justify-between rounded-lg bg-gray-50 p-3"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-full ${colors.bg}`}
-                >
-                  <svg
-                    className={`h-5 w-5 ${colors.text}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    {getActivityIcon(activity)}
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {getActivityLabel(activity)}
-                    {statusLabel && (
-                      <span className="text-gray-500">{statusLabel}</span>
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(activity.createdAt).toLocaleDateString("en-NG", {
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    {activity.note && ` · ${activity.note}`}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className={`font-semibold ${colors.text}`}>
-                  {colors.sign}
-                  {formatNgn(parseFloat(activity.amount))}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {activities.length > 10 && (
-        <p className="mt-3 text-center text-xs text-gray-400">
-          Showing 10 of {activities.length} activities
-        </p>
+    <section className="card">
+      <h3 className="mb-2 font-display text-lg font-bold text-ink">Activity</h3>
+      <ActivityList items={items} />
+      {items.length > 10 && (
+        <p className="mt-2 text-center text-sm text-ink-muted">Showing latest 10 of {items.length}</p>
       )}
-    </div>
+    </section>
   );
 }

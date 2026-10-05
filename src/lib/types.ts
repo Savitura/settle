@@ -5,6 +5,7 @@ export interface GroupMember {
   email: string | null;
   phone: string | null;
   joinedAt: string;
+  role: "owner" | "member";
   balance: {
     usdc: string;
     usdcFormatted: string;
@@ -92,6 +93,18 @@ export interface Transaction {
   txHash: string;
   status: TransactionStatus;
   note?: string;
+  createdAt: string;
+  updatedAt?: string;
+  failureReason?: string | null;
+}
+
+export interface Notification {
+  id: string;
+  groupId?: string | null;
+  type: string;
+  title: string;
+  body: string;
+  readAt?: string | null;
   createdAt: string;
 }
 

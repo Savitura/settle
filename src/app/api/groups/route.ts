@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, or, sql } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db/connection";
+import { apiErrorResponse, authenticateRequest, sameAddress, ApiError } from "@/lib/server/auth";
+import { syncGroupBalances } from "@/lib/server/balances";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -31,8 +33,8 @@ async function generateUniqueInviteCode(db: ReturnType<typeof getDb>, maxRetries
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request);
     const { searchParams } = new URL(request.url);
-    const walletAddress = searchParams.get("wallet");
     const inviteCode = searchParams.get("inviteCode");
     const groupId = searchParams.get("id");
 
@@ -47,16 +49,18 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Group not found" }, { status: 404 });
       }
 
-      const members = await db.query.groupMembers.findMany({
-        where: eq(schema.groupMembers.groupId, groupId),
-      });
+      const members = await syncGroupBalances(db, groupId);
+      if (!members.some((member) => sameAddress(member.walletAddress, auth.walletAddress))) {
+        throw new ApiError(403, "You are not a member of this family wallet");
+      }
+      const syncedTotal = members.reduce((sum, member) => sum + Number(member.balanceUsdc), 0).toFixed(6);
 
       return NextResponse.json({
         group: {
           ...group,
           totalBalance: {
-            usdc: group.totalBalanceUsdc,
-            usdcFormatted: `$${parseFloat(group.totalBalanceUsdc).toFixed(2)}`,
+            usdc: syncedTotal,
+            usdcFormatted: `$${parseFloat(syncedTotal).toFixed(2)}`,
           },
           members: members.map((m) => ({
             id: m.id,
@@ -65,6 +69,7 @@ export async function GET(request: NextRequest) {
             email: m.email,
             phone: m.phone,
             joinedAt: m.joinedAt.toISOString(),
+            role: m.role,
             balance: {
               usdc: m.balanceUsdc,
               usdcFormatted: `$${parseFloat(m.balanceUsdc).toFixed(2)}`,
@@ -101,6 +106,7 @@ export async function GET(request: NextRequest) {
             email: m.email,
             phone: m.phone,
             joinedAt: m.joinedAt.toISOString(),
+            role: m.role,
             balance: {
               usdc: m.balanceUsdc,
               usdcFormatted: `$${parseFloat(m.balanceUsdc).toFixed(2)}`,
@@ -110,12 +116,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    if (!walletAddress) {
-      return NextResponse.json({ error: "Wallet address or invite code required" }, { status: 400 });
-    }
+    const effectiveWallet = auth.walletAddress;
 
     const memberRows = await db.query.groupMembers.findMany({
-      where: sql`LOWER(${schema.groupMembers.walletAddress}) = LOWER(${walletAddress})`,
+      where: sql`LOWER(${schema.groupMembers.walletAddress}) = LOWER(${effectiveWallet})`,
     });
 
     const groupIds = memberRows.map((m) => m.groupId);
@@ -130,14 +134,13 @@ export async function GET(request: NextRequest) {
 
     const groups = await Promise.all(
       groupsData.map(async (group) => {
-        const members = await db.query.groupMembers.findMany({
-          where: eq(schema.groupMembers.groupId, group.id),
-        });
+        const members = await syncGroupBalances(db, group.id);
+        const totalUsdc = members.reduce((sum, member) => sum + Number(member.balanceUsdc), 0).toFixed(6);
         return {
           ...group,
           totalBalance: {
-            usdc: group.totalBalanceUsdc,
-            usdcFormatted: `$${parseFloat(group.totalBalanceUsdc).toFixed(2)}`,
+            usdc: totalUsdc,
+            usdcFormatted: `$${parseFloat(totalUsdc).toFixed(2)}`,
           },
           members: members.map((m) => ({
             id: m.id,
@@ -146,6 +149,7 @@ export async function GET(request: NextRequest) {
             email: m.email,
             phone: m.phone,
             joinedAt: m.joinedAt.toISOString(),
+            role: m.role,
             balance: {
               usdc: m.balanceUsdc,
               usdcFormatted: `$${parseFloat(m.balanceUsdc).toFixed(2)}`,
@@ -157,18 +161,16 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ groups });
   } catch (error) {
-    console.error("Error fetching groups:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch groups" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to fetch groups");
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request);
     const body = await request.json();
-    const { name, creatorWalletAddress, creatorDisplayName, creatorEmail, creatorPhone } = body;
+    const { name, creatorDisplayName, creatorEmail, creatorPhone } = body;
+    const creatorWalletAddress = auth.walletAddress;
 
     if (!name || !creatorWalletAddress) {
       return NextResponse.json(
@@ -201,6 +203,7 @@ export async function POST(request: NextRequest) {
       phone: creatorPhone || null,
       joinedAt: now,
       balanceUsdc: "0",
+      role: "owner",
     });
 
     return NextResponse.json({
@@ -225,10 +228,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error creating group:", error);
-    return NextResponse.json(
-      { error: "Failed to create group" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to create group");
   }
 }

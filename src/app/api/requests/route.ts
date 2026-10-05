@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, or, and, sql, desc } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db/connection";
+import { ApiError, apiErrorResponse, authenticateRequest, sameAddress } from "@/lib/server/auth";
+import { notify, recordAudit } from "@/lib/server/operations";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -9,6 +11,7 @@ function generateId(): string {
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request);
     const { searchParams } = new URL(request.url);
     const groupId = searchParams.get("groupId");
     const walletAddress = searchParams.get("wallet");
@@ -21,6 +24,9 @@ export async function GET(request: NextRequest) {
       const req = await db.query.moneyRequests.findFirst({
         where: eq(schema.moneyRequests.id, requestId),
       });
+      if (req && !sameAddress(req.fromAddress, auth.walletAddress) && !sameAddress(req.toAddress, auth.walletAddress)) {
+        throw new ApiError(403, "You cannot view this request");
+      }
       return NextResponse.json({
         request: req
           ? {
@@ -37,7 +43,7 @@ export async function GET(request: NextRequest) {
         where: and(
           eq(schema.moneyRequests.groupId, groupId),
           eq(schema.moneyRequests.status, "pending"),
-          sql`LOWER(${schema.moneyRequests.toAddress}) = LOWER(${walletAddress})`
+          sql`LOWER(${schema.moneyRequests.toAddress}) = LOWER(${auth.walletAddress})`
         ),
         orderBy: [desc(schema.moneyRequests.createdAt)],
       });
@@ -51,6 +57,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (groupId) {
+      const member = await db.query.groupMembers.findFirst({
+        where: sql`${schema.groupMembers.groupId} = ${groupId} AND LOWER(${schema.groupMembers.walletAddress}) = LOWER(${auth.walletAddress})`,
+      });
+      if (!member) throw new ApiError(403, "You are not a member of this family wallet");
       const requests = await db.query.moneyRequests.findMany({
         where: eq(schema.moneyRequests.groupId, groupId),
         orderBy: [desc(schema.moneyRequests.createdAt)],
@@ -67,8 +77,8 @@ export async function GET(request: NextRequest) {
     if (walletAddress) {
       const requests = await db.query.moneyRequests.findMany({
         where: or(
-          sql`LOWER(${schema.moneyRequests.fromAddress}) = LOWER(${walletAddress})`,
-          sql`LOWER(${schema.moneyRequests.toAddress}) = LOWER(${walletAddress})`
+          sql`LOWER(${schema.moneyRequests.fromAddress}) = LOWER(${auth.walletAddress})`,
+          sql`LOWER(${schema.moneyRequests.toAddress}) = LOWER(${auth.walletAddress})`
         ),
         orderBy: [desc(schema.moneyRequests.createdAt)],
       });
@@ -86,18 +96,16 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
-    console.error("Error fetching requests:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch requests" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to fetch requests");
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request);
     const body = await request.json();
-    const { groupId, fromAddress, toAddress, amountUsdc, amountNgn, note } = body;
+    const { groupId, toAddress, amountUsdc, amountNgn, note } = body;
+    const fromAddress = auth.walletAddress;
 
     if (!groupId || !fromAddress || !toAddress || !amountUsdc || !amountNgn) {
       return NextResponse.json(
@@ -105,8 +113,18 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(toAddress) || !/^\d{1,12}$/.test(amountNgn)) {
+      throw new ApiError(400, "Invalid request details");
+    }
+    const configuredRate = Number(process.env.NGN_PER_USDC);
+    if (!Number.isFinite(configuredRate) || configuredRate <= 0) throw new ApiError(503, "Settlement quote is not configured");
+    const authoritativeUsdc = (Number(amountNgn) / configuredRate).toFixed(6);
 
     const db = getDb();
+    const members = await db.query.groupMembers.findMany({ where: eq(schema.groupMembers.groupId, groupId) });
+    if (!members.some((m) => sameAddress(m.walletAddress, fromAddress)) || !members.some((m) => sameAddress(m.walletAddress, toAddress))) {
+      throw new ApiError(403, "Both people must belong to this family wallet");
+    }
     const id = generateId();
     const now = new Date();
 
@@ -115,12 +133,17 @@ export async function POST(request: NextRequest) {
       groupId,
       fromAddress,
       toAddress,
-      amountUsdc,
+      amountUsdc: authoritativeUsdc,
       amountNgn,
       note: note || null,
       status: "pending",
       createdAt: now,
     });
+
+    await Promise.all([
+      notify(toAddress, "money_request", "New money request", `${amountNgn} NGN was requested from you.`, groupId),
+      recordAudit(auth.walletAddress, "request.created", "money_request", id, { groupId, toAddress, amountNgn }),
+    ]);
 
     return NextResponse.json({
       request: {
@@ -128,7 +151,7 @@ export async function POST(request: NextRequest) {
         groupId,
         fromAddress,
         toAddress,
-        amountUsdc,
+        amountUsdc: authoritativeUsdc,
         amountNgn,
         note: note || null,
         status: "pending",
@@ -138,16 +161,13 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error creating request:", error);
-    return NextResponse.json(
-      { error: "Failed to create request" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to create request");
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request);
     const body = await request.json();
     const { requestId, status, settledTxId } = body;
 
@@ -167,6 +187,12 @@ export async function PATCH(request: NextRequest) {
     if (!existing) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
+    if (status === "paid") throw new ApiError(400, "Pay requests through the transfer flow");
+    if (!sameAddress(existing.toAddress, auth.walletAddress) && !sameAddress(existing.fromAddress, auth.walletAddress)) {
+      throw new ApiError(403, "You cannot update this request");
+    }
+    if (status === "declined" && !sameAddress(existing.toAddress, auth.walletAddress)) throw new ApiError(403, "Only the payer can decline");
+    if (status === "cancelled" && !sameAddress(existing.fromAddress, auth.walletAddress)) throw new ApiError(403, "Only the requester can cancel");
 
     const updateData: { status: string; settledAt?: Date; settledTxId?: string } = { status };
 
@@ -179,6 +205,12 @@ export async function PATCH(request: NextRequest) {
       .update(schema.moneyRequests)
       .set(updateData)
       .where(eq(schema.moneyRequests.id, requestId));
+
+    const otherWallet = sameAddress(existing.fromAddress, auth.walletAddress) ? existing.toAddress : existing.fromAddress;
+    await Promise.all([
+      notify(otherWallet, `request_${status}`, `Request ${status}`, `A money request was ${status}.`, existing.groupId),
+      recordAudit(auth.walletAddress, `request.${status}`, "money_request", requestId),
+    ]);
 
     const updated = await db.query.moneyRequests.findFirst({
       where: eq(schema.moneyRequests.id, requestId),
@@ -194,10 +226,6 @@ export async function PATCH(request: NextRequest) {
         : null,
     });
   } catch (error) {
-    console.error("Error updating request:", error);
-    return NextResponse.json(
-      { error: "Failed to update request" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to update request");
   }
 }

@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 
+import { Sheet, SheetHeader } from "./ui/Sheet";
+import { CopyIcon, ShareIcon } from "./ui/Icons";
+
 interface InviteModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -9,145 +12,77 @@ interface InviteModalProps {
   groupName: string;
 }
 
-export function InviteModal({
-  isOpen,
-  onClose,
-  inviteCode,
-  groupName,
-}: InviteModalProps) {
-  const [copied, setCopied] = useState(false);
-
-  if (!isOpen) return null;
+export function InviteModal({ isOpen, onClose, inviteCode, groupName }: InviteModalProps) {
+  const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
   const inviteUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/join?code=${inviteCode}`
-      : "";
+    typeof window !== "undefined" ? `${window.location.origin}/join?code=${inviteCode}` : "";
+  const shareText = `Join our family wallet "${groupName}" on Settle. Use code ${inviteCode} or tap: ${inviteUrl}`;
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
-  const handleCopyCode = async () => {
+  const copy = async (what: "code" | "link") => {
     try {
-      await navigator.clipboard.writeText(inviteCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  };
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(what === "code" ? inviteCode : inviteUrl);
+      setCopied(what);
+      setTimeout(() => setCopied(null), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
     }
   };
 
   const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Join ${groupName} on Settle`,
-          text: `Join my family wallet "${groupName}" using code: ${inviteCode}`,
-          url: inviteUrl,
-        });
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") {
-          console.error("Failed to share:", err);
-        }
-      }
+    try {
+      await navigator.share({ title: `Join ${groupName} on Settle`, text: shareText, url: inviteUrl });
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") console.error("Failed to share:", err);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Invite Members
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <p className="mb-4 text-sm text-gray-600">
-          Share this code or link with family members to invite them to{" "}
-          <span className="font-medium">{groupName}</span>.
+    <Sheet isOpen={isOpen} onClose={onClose} label="Invite family">
+      <SheetHeader title="Invite family" onClose={onClose} />
+      <div className="px-5 pb-5 pt-2">
+        <p className="text-sm text-ink-muted">
+          Anyone with this code can join <span className="font-semibold text-ink">{groupName}</span>.
         </p>
 
-        <div className="mb-4 rounded-lg bg-gray-50 p-4">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-            Invite Code
-          </p>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-2xl font-bold tracking-wider text-gray-900">
-              {inviteCode}
-            </span>
-            <button
-              onClick={handleCopyCode}
-              className="rounded-lg bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-            >
-              {copied ? "Copied!" : "Copy"}
-            </button>
-          </div>
-        </div>
-
-        <div className="mb-4 rounded-lg border border-gray-200 p-3">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-            Invite Link
-          </p>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={inviteUrl}
-              readOnly
-              className="flex-1 truncate rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600"
-            />
-            <button
-              onClick={handleCopyLink}
-              className="rounded-lg bg-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-300"
-            >
-              Copy
-            </button>
-          </div>
-        </div>
-
-        <div className="flex gap-3">
+        <div className="relative mt-5 overflow-hidden rounded-3xl bg-gradient-to-br from-primary-500 via-primary-600 to-primary-800 p-6 text-center text-white shadow-glow">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-sun-300/30 blur-2xl" />
+          <p className="relative text-xs font-semibold uppercase tracking-[0.14em] text-primary-100">Invite code</p>
+          <p className="relative mt-2 font-mono text-4xl font-bold tracking-[0.3em]">{inviteCode}</p>
           <button
             type="button"
-            onClick={onClose}
-            className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            onClick={() => copy("code")}
+            className="focus-ring relative mt-4 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 text-sm font-semibold backdrop-blur transition-all hover:bg-white/30 active:scale-95"
           >
-            Done
+            <CopyIcon size={16} />
+            {copied === "code" ? "Copied" : "Copy code"}
           </button>
-          {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
-            <button
-              type="button"
-              onClick={handleShare}
-              className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-            >
-              Share
-            </button>
-          )}
         </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="focus-ring inline-flex items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3.5 text-sm font-bold text-[#073b1d] transition-all hover:brightness-105 active:scale-[0.98]"
+          >
+            WhatsApp
+          </a>
+          <button
+            type="button"
+            onClick={canShare ? handleShare : () => copy("link")}
+            className="btn-ghost"
+          >
+            {canShare ? <ShareIcon size={16} /> : <CopyIcon size={16} />}
+            {canShare ? "Share link" : copied === "link" ? "Link copied" : "Copy link"}
+          </button>
+        </div>
+
+        <button type="button" onClick={onClose} className="mt-3 w-full py-3 text-sm font-semibold text-ink-muted hover:text-ink">
+          Done
+        </button>
       </div>
-    </div>
+    </Sheet>
   );
 }

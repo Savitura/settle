@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, sql, and } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db/connection";
+import { ApiError, apiErrorResponse, authenticateRequest } from "@/lib/server/auth";
 
 export async function POST(request: NextRequest) {
   try {
+    await authenticateRequest(request);
+    if (process.env.ENABLE_DEMO_MODE !== "true") throw new ApiError(403, "Direct balance changes are disabled");
     const body = await request.json();
     const { groupId, walletAddress, usdcBalance, seedMock } = body;
 
@@ -132,10 +135,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error updating balance:", error);
-    return NextResponse.json(
-      { error: "Failed to update balance" },
-      { status: 500 }
-    );
+    return apiErrorResponse(error, "Failed to update balance");
   }
 }
