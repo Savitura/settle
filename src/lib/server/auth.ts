@@ -43,7 +43,7 @@ export async function authenticateRequest(request: NextRequest) {
     const wallet = user.wallet ?? user.linkedAccounts.find(
       (account) => account.type === "wallet" && account.chainType === "ethereum"
     );
-    if (!wallet || !("address" in wallet)) throw new ApiError(403, "An embedded Ethereum wallet is required");
+    if (!wallet || !("address" in wallet)) throw new ApiError(403, "Your Settle account is still being set up. Please sign out and back in.");
     return { userId: claims.userId, walletAddress: wallet.address.toLowerCase() };
   } catch (error) {
     if (error instanceof ApiError) throw error;

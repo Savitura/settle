@@ -83,7 +83,7 @@ export function SendMoneyModal({
         const tokenAddress = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS;
         const wallet = wallets.find((candidate) => candidate.address.toLowerCase() === currentUserWallet.toLowerCase());
         if (!wallet || !tokenAddress || /^0x0{40}$/i.test(tokenAddress)) {
-          throw new Error("USDC settlement is not configured");
+          throw new Error("Payments aren't available right now. Please try again a little later.");
         }
         if (!txHash) {
           await wallet.switchChain(monadTestnet.id);
@@ -232,7 +232,7 @@ export function SendMoneyModal({
               <Row label={`${recipientName} gets`} value={formatNgn(ngnAmount)} strong />
               <Row
                 label="Network fee"
-                value={process.env.NEXT_PUBLIC_SPONSOR_GAS === "true" ? "Covered by Settle" : "Paid in MON"}
+                value={process.env.NEXT_PUBLIC_SPONSOR_GAS === "true" ? "Covered by Settle" : "Small network fee"}
               />
               <Row label="Settlement" value={<span className="inline-flex items-center gap-1"><BoltIcon size={14} className="text-sun-500" /> After confirmation</span>} />
               {showCashOut && <Row label="Cash out" value="To bank (demo)" />}
@@ -252,7 +252,7 @@ export function SendMoneyModal({
             title={step === "submitting" ? "Preparing payment" : "Confirming payment"}
             subtitle={step === "submitting"
               ? `Authorizing ${formatNgn(ngnAmount)} to ${recipientName}…`
-              : "Submitted to Monad. This can take a little longer during busy periods."}
+              : "Payment sent. Confirming can take a little longer when things are busy."}
             from={<Avatar name={myName} seed={currentUserWallet} size="lg" />}
             to={<Avatar name={recipientName} seed={selectedMember?.walletAddress} size="lg" />}
           />
@@ -277,7 +277,7 @@ export function SendMoneyModal({
             <span className="tabular font-bold text-ink">{formatNgn(ngnAmount)}</span> is with {recipientName}.
             <br />
             <span className="text-sm text-ink-muted">
-              {showCashOut ? "Cash out started (demo)." : "USDC transfer confirmed on Monad."}
+              {showCashOut ? "Cash out started (demo)." : "Payment confirmed."}
             </span>
           </SuccessView>
         </StepPanel>

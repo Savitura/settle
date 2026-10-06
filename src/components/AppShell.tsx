@@ -87,7 +87,7 @@ export function LoginGate({ onLogin }: { onLogin: () => void }) {
               Family money, <span className="text-primary-600">finally simple.</span>
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-ink-muted sm:text-lg">
-              One shared wallet for the people you trust. Send, request and settle up in naira—without the crypto jargon.
+              One shared wallet for the people you trust. Send money home, share family costs and settle up, all in naira.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <button type="button" onClick={onLogin} className="focus-ring rounded-full bg-primary-500 px-7 py-4 font-display text-base font-bold text-ink shadow-glow active:scale-[0.98]">

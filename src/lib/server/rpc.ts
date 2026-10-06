@@ -17,7 +17,7 @@ function configuredRpcUrls(): string[] {
 
 export function getMonadTransport() {
   const urls = configuredRpcUrls();
-  if (urls.length === 0) throw new ApiError(503, "Monad RPC service is not configured");
+  if (urls.length === 0) throw new ApiError(503, "Payments aren't available right now. Please try again a little later.");
 
   const transports = urls.map((url) => http(url, {
     timeout: 15_000,

@@ -71,7 +71,7 @@ export function SettleRequestModal({
       if (process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE !== "true") {
         const tokenAddress = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS;
         const wallet = wallets.find((candidate) => candidate.address.toLowerCase() === currentUserWallet.toLowerCase());
-        if (!wallet || !tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new Error("USDC settlement is not configured");
+        if (!wallet || !tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new Error("Payments aren't available right now. Please try again a little later.");
         if (!txHash) {
           // The requester can change or cancel a request while it's open, so check it's still the same before paying
           const latest = await getRequestById(request.id).catch(() => null);

@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     });
 
     await Promise.all([
-      notify(toAddress, "money_request", "New money request", `${amountNgn} NGN was requested from you.`, groupId),
+      notify(toAddress, "money_request", "New money request", `${formatNgn(Number(amountNgn))} was requested from you.`, groupId),
       recordAudit(auth.walletAddress, "request.created", "money_request", id, { groupId, toAddress, amountNgn }),
     ]);
 
