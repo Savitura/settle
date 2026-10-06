@@ -11,14 +11,17 @@ import {
 } from "@/lib/db";
 import { Group, Transaction, MoneyRequest } from "@/lib/types";
 import { formatNgn, usdcToNgn } from "@/lib/currency";
+import { DEMO_FUNDS_ENABLED, DemoFunds, useDemoFunds } from "@/lib/useDemoFunds";
 import { InviteModal } from "./InviteModal";
 import { SendMoneyModal } from "./SendMoneyModal";
 import { RequestMoneyModal } from "./RequestMoneyModal";
 import { SettleRequestModal } from "./SettleRequestModal";
+import { EditGroupModal } from "./EditGroupModal";
 import { Avatar, memberContact, memberName } from "./ui/Avatar";
 import { IconButton } from "./ui/Sheet";
 import { useCountUp } from "./ui/Status";
-import { BackIcon, InviteIcon, RequestIcon, SendIcon, SettleIcon, SparkIcon } from "./ui/Icons";
+import { StartAction, StartStep } from "./ui/StartSteps";
+import { BackIcon, EditIcon, InviteIcon, RequestIcon, SendIcon, SettleIcon, SparkIcon } from "./ui/Icons";
 
 export type GroupAction = "send" | "request" | "settle" | "invite";
 
@@ -53,6 +56,9 @@ export function GroupDetail({
   const [highlightPending, setHighlightPending] = useState(false);
   const [managementMessage, setManagementMessage] = useState("");
   const [managing, setManaging] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [showRename, setShowRename] = useState(false);
+  const [changeRequest, setChangeRequest] = useState<{ mode: "edit" | "cancel"; request: MoneyRequest } | null>(null);
   const pendingRef = useRef<HTMLDivElement>(null);
 
   const loadData = useCallback(async () => {
@@ -86,7 +92,11 @@ export function GroupDetail({
   const outboundOpen = requests.filter(
     (r) => r.status === "pending" && same(r.fromAddress, currentUserWallet)
   );
-  const allEven = loaded && pendingRequests.length === 0 && outboundOpen.length === 0 && hasOtherMembers;
+  // "All even" only means something once money has actually moved or been asked for here
+  const hasActivity = transactions.length > 0 || requests.length > 0;
+  const allEven =
+    loaded && hasActivity && pendingRequests.length === 0 && outboundOpen.length === 0 && hasOtherMembers;
+  const showGettingStarted = loaded && !hasActivity;
 
   const myBalanceNgn = useCountUp(usdcToNgn(currentBalance));
   const groupTotalNgn = useCountUp(usdcToNgn(groupTotal));
@@ -121,6 +131,8 @@ export function GroupDetail({
     await loadData();
   };
 
+  const demoFunds = useDemoFunds(refreshAll);
+
   const handleSettleSuccess = async () => {
     await refreshAll();
     setSelectedRequest(null);
@@ -129,6 +141,7 @@ export function GroupDetail({
   const runGroupAction = async (action: "rotate_invite" | "remove_member" | "leave", memberId?: string) => {
     setManaging(true);
     setManagementMessage("");
+    setConfirmRemoveId(null);
     try {
       const result = await manageGroup({ action, groupId: group.id, memberId });
       if (action === "rotate_invite") setManagementMessage(`New invite code: ${result.inviteCode}`);
@@ -191,7 +204,11 @@ export function GroupDetail({
 
   let helper: string | null = null;
   if (!hasOtherMembers) helper = "Invite family to start sending and requesting";
-  else if (!canSend) helper = "Add demo balance below to start sending";
+  else if (!canSend) {
+    helper = DEMO_FUNDS_ENABLED
+      ? "Add some money to start sending. Get demo funds any time from Home."
+      : "Add some money to your balance to start sending";
+  }
 
   return (
     <div className="space-y-5">
@@ -200,6 +217,11 @@ export function GroupDetail({
           <BackIcon />
         </IconButton>
         <h2 className="flex-1 truncate font-display text-2xl font-bold text-ink">{group.name}</h2>
+        {isCreator && (
+          <IconButton label="Rename wallet" onClick={() => setShowRename(true)} className="bg-white shadow-card">
+            <EditIcon size={18} />
+          </IconButton>
+        )}
       </div>
 
       {/* Hero balance */}
@@ -298,6 +320,59 @@ export function GroupDetail({
         </section>
       )}
 
+      {/* Requests you made that are still unpaid: change or cancel them */}
+      {outboundOpen.length > 0 && (
+        <section className="card animate-rise-in">
+          <h3 className="font-display text-lg font-bold text-ink">You asked</h3>
+          <p className="mt-0.5 text-sm text-ink-muted">Waiting to be paid. You can change or cancel these until they are.</p>
+          <ul className="mt-2 divide-y divide-ink/5">
+            {outboundOpen.map((req) => {
+              const name = nameFor(req.toAddress);
+              return (
+                <li key={req.id} className="flex items-center gap-3 py-3">
+                  <Avatar name={name} seed={req.toAddress} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-ink">
+                      {name} · <span className="tabular">{formatNgn(parseFloat(req.amountNgn))}</span>
+                    </p>
+                    {req.note && <p className="truncate text-xs text-ink-muted">{req.note}</p>}
+                  </div>
+                  <div className="flex shrink-0 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setChangeRequest({ mode: "edit", request: req })}
+                      className="focus-ring rounded-full border border-ink/15 px-3 py-1.5 text-xs font-bold text-ink-soft hover:bg-ink/[0.04]"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChangeRequest({ mode: "cancel", request: req })}
+                      className="focus-ring rounded-full border border-coral-200 px-3 py-1.5 text-xs font-bold text-coral-700 hover:bg-coral-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {showGettingStarted && (
+        <GroupGettingStarted
+          groupName={group.name}
+          hasOtherMembers={hasOtherMembers}
+          canInvite={canInvite}
+          canSend={canSend}
+          demoFunds={demoFunds}
+          onInvite={() => setShowInvite(true)}
+          onSend={() => setShowSendMoney(true)}
+          onRequest={() => setShowRequestMoney(true)}
+        />
+      )}
+
       {allEven && (
         <div className="flex animate-rise-in items-center gap-3 rounded-[28px] bg-primary-50 p-4 ring-1 ring-primary-200">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-white">
@@ -310,8 +385,8 @@ export function GroupDetail({
         </div>
       )}
 
-      {/* Demo balance */}
-      {isCreator && groupTotal === 0 && (
+      {/* Demo balance (local demo mode only; the live app uses "Get demo funds") */}
+      {process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" && isCreator && groupTotal === 0 && (
         <section className="relative overflow-hidden rounded-[28px] border-2 border-dashed border-sun-400 bg-sun-100/60 p-5">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sun-300 to-sun-500 text-ink">
@@ -365,9 +440,20 @@ export function GroupDetail({
                   {formatNgn(usdcToNgn(parseFloat(member.balance.usdc)))}
                 </p>
                 {isCreator && !isMe && parseFloat(member.balance.usdc) === 0 && (
-                  <button type="button" disabled={managing} onClick={() => runGroupAction("remove_member", member.id)} className="text-xs font-bold text-coral-700 disabled:opacity-50">
-                    Remove
-                  </button>
+                  confirmRemoveId === member.id ? (
+                    <span className="flex shrink-0 items-center gap-2">
+                      <button type="button" disabled={managing} onClick={() => runGroupAction("remove_member", member.id)} className="rounded-full bg-coral-500 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+                        Remove {name}?
+                      </button>
+                      <button type="button" disabled={managing} onClick={() => setConfirmRemoveId(null)} className="text-xs font-bold text-ink-muted disabled:opacity-50">
+                        Keep
+                      </button>
+                    </span>
+                  ) : (
+                    <button type="button" disabled={managing} onClick={() => setConfirmRemoveId(member.id)} className="text-xs font-bold text-coral-700 disabled:opacity-50">
+                      Remove
+                    </button>
+                  )
                 )}
               </li>
             );
@@ -422,10 +508,33 @@ export function GroupDetail({
         onSuccess={loadData}
       />
 
+      <RequestMoneyModal
+        isOpen={!!changeRequest}
+        onClose={() => setChangeRequest(null)}
+        group={group}
+        currentUserWallet={currentUserWallet}
+        onSuccess={loadData}
+        editRequest={changeRequest?.request ?? null}
+        mode={changeRequest?.mode ?? "edit"}
+      />
+
+      <EditGroupModal
+        isOpen={showRename}
+        onClose={() => setShowRename(false)}
+        group={group}
+        onSaved={async () => {
+          await onRefresh();
+        }}
+      />
+
       {selectedRequest && (
         <SettleRequestModal
           isOpen={!!selectedRequest}
-          onClose={() => setSelectedRequest(null)}
+          onClose={() => {
+            setSelectedRequest(null);
+            // The request may have been changed or cancelled while it was open
+            loadData();
+          }}
           request={selectedRequest}
           group={group}
           currentUserWallet={currentUserWallet}
@@ -433,6 +542,90 @@ export function GroupDetail({
         />
       )}
     </div>
+  );
+}
+
+function GroupGettingStarted({
+  groupName,
+  hasOtherMembers,
+  canInvite,
+  canSend,
+  demoFunds,
+  onInvite,
+  onSend,
+  onRequest,
+}: {
+  groupName: string;
+  hasOtherMembers: boolean;
+  canInvite: boolean;
+  canSend: boolean;
+  demoFunds: DemoFunds;
+  onInvite: () => void;
+  onSend: () => void;
+  onRequest: () => void;
+}) {
+  const hasMoney = canSend || demoFunds.state === "success";
+  return (
+    <section className="card animate-rise-in">
+      <p className="eyebrow">Getting started</p>
+      <h3 className="mt-1 font-display text-lg font-bold text-ink">Nothing has happened in {groupName} yet</h3>
+      <p className="mt-0.5 text-sm text-ink-muted">Here&apos;s how to get the family going.</p>
+      <ol className="mt-1 divide-y divide-ink/5">
+        <StartStep
+          index={1}
+          title="Bring your family in"
+          body="Share the invite code so up to 2 people can join."
+          done={hasOtherMembers}
+        >
+          {canInvite && (
+            <StartAction primary onClick={onInvite}>
+              Invite family
+            </StartAction>
+          )}
+        </StartStep>
+        <StartStep
+          index={2}
+          title="Add some money"
+          body={
+            DEMO_FUNDS_ENABLED
+              ? "Get demo funds to try it out. You can do this later from Home too."
+              : "Top up your balance so you can send."
+          }
+          done={hasMoney}
+        >
+          {DEMO_FUNDS_ENABLED && !demoFunds.done && (
+            <StartAction primary={hasOtherMembers} onClick={demoFunds.claim} disabled={demoFunds.busy}>
+              {demoFunds.busy ? "Adding demo funds…" : "Get demo funds"}
+            </StartAction>
+          )}
+        </StartStep>
+        <StartStep
+          index={3}
+          title="Send or ask for money"
+          body={hasOtherMembers ? "Send money to family, or ask for what you need." : "Once someone joins you can send and ask for money."}
+          done={false}
+        >
+          {hasOtherMembers && (
+            <>
+              {canSend && (
+                <StartAction primary onClick={onSend}>
+                  Send money
+                </StartAction>
+              )}
+              <StartAction onClick={onRequest}>Ask for money</StartAction>
+            </>
+          )}
+        </StartStep>
+      </ol>
+      {demoFunds.message && (
+        <p
+          className={`mt-1 text-center text-xs ${demoFunds.state === "error" ? "text-coral-700" : "text-primary-800"}`}
+          role="status"
+        >
+          {demoFunds.message}
+        </p>
+      )}
+    </section>
   );
 }
 
