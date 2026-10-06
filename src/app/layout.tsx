@@ -16,6 +16,7 @@ const body = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://settlefinance.vercel.app"),
   title: "Settle - Shared Family Wallets",
   description:
     "Nigeria/Africa shared family wallets and remittance UX on Monad",
