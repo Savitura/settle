@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { getGroupByInviteCode, joinGroup } from "@/lib/db";
+import { getGroupByInviteCode, getSavedProfile, joinGroup } from "@/lib/db";
 import { Group } from "@/lib/types";
 import { Sheet, SheetHeader } from "./ui/Sheet";
 import { Avatar } from "./ui/Avatar";
@@ -12,6 +12,8 @@ interface JoinGroupModalProps {
   onClose: () => void;
   onJoined: (group: Group) => void;
   walletAddress: string;
+  /** Name from the user's profile; falls back to the one saved on this device. */
+  displayName?: string;
   userEmail?: string;
   userPhone?: string;
   initialCode?: string;
@@ -22,6 +24,7 @@ export function JoinGroupModal({
   onClose,
   onJoined,
   walletAddress,
+  displayName,
   userEmail,
   userPhone,
   initialCode = "",
@@ -57,7 +60,7 @@ export function JoinGroupModal({
       const group = await joinGroup(
         code.trim(),
         walletAddress,
-        undefined,
+        displayName || getSavedProfile(walletAddress)?.displayName || undefined,
         userEmail,
         userPhone
       );

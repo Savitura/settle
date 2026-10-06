@@ -10,7 +10,7 @@ export async function syncGroupBalances(db: ReturnType<typeof getDb>, groupId: s
   if (process.env.ENABLE_DEMO_MODE === "true") return members;
 
   const tokenAddress = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS as `0x${string}` | undefined;
-  if (!tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new ApiError(503, "USDC balance service is not configured");
+  if (!tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new ApiError(503, "Balances aren't available right now. Please try again a little later.");
   const client = getMonadPublicClient();
   const balances = await Promise.all(members.map((member) => client.readContract({
     address: tokenAddress,

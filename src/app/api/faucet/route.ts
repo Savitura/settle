@@ -22,9 +22,9 @@ export async function POST(request: NextRequest) {
     const tokenAddress = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS as `0x${string}` | undefined;
     const configuredAmount = Number(process.env.TESTNET_FAUCET_USDC_AMOUNT || "25");
     if (!privateKey || !/^0x[a-fA-F0-9]{64}$/.test(privateKey)) throw new ApiError(503, "Demo funding wallet is not configured");
-    if (!tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new ApiError(503, "Demo USDC is not configured");
+    if (!tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new ApiError(503, "Demo funds aren't set up right now");
     if (!Number.isFinite(configuredAmount) || configuredAmount <= 0 || configuredAmount > 100) {
-      throw new ApiError(503, "Demo funding amount must be between 0 and 100 USDC");
+      throw new ApiError(503, "Demo funds aren't set up right now");
     }
 
     const db = getDb();

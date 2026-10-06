@@ -8,6 +8,7 @@ import { getDb, schema } from "@/lib/db/connection";
 import { ApiError, apiErrorResponse, authenticateRequest, sameAddress } from "@/lib/server/auth";
 import { getMonadPublicClient } from "@/lib/server/rpc";
 import { notify, recordAudit } from "@/lib/server/operations";
+import { formatNgn } from "@/lib/currency";
 
 const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 const transferSchema = z.object({
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     const id = randomUUID();
     const idempotencyKey = input.idempotencyKey ?? input.txHash ?? request.headers.get("idempotency-key") ?? randomUUID();
     const isDemo = process.env.ENABLE_DEMO_MODE === "true";
-    if (!input.txHash && !isDemo) throw new ApiError(400, "A confirmed USDC transaction is required");
+    if (!input.txHash && !isDemo) throw new ApiError(400, "We couldn't confirm this payment. Please try again.");
     if (input.txHash) await verifyUsdcTransfer(input.txHash as `0x${string}`, auth.walletAddress, input.toAddress, amountUsdc);
     const txHash = input.txHash ?? `demo-ledger:${id}`;
     const now = new Date();
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     if (!transaction) throw new ApiError(409, "Insufficient balance or duplicate transfer");
 
     await Promise.all([
-      notify(recipient.walletAddress, "money_received", "Money received", `${input.amountNgn} NGN was sent to you.`, input.groupId),
+      notify(recipient.walletAddress, "money_received", "Money received", `${formatNgn(Number(input.amountNgn))} was sent to you.`, input.groupId),
       recordAudit(auth.walletAddress, input.requestId ? "transfer.settled" : "transfer.sent", "transaction", transaction.id, { groupId: input.groupId, txHash }),
     ]);
 
@@ -114,10 +115,10 @@ function serialize(transaction: typeof schema.transactions.$inferSelect) {
 
 async function verifyUsdcTransfer(txHash: `0x${string}`, from: string, to: string, amountUsdc: string) {
   const tokenAddress = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS as `0x${string}` | undefined;
-  if (!tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new ApiError(503, "USDC settlement is not configured");
+  if (!tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new ApiError(503, "Payments aren't available right now. Please try again a little later.");
   const client = getMonadPublicClient();
   const receipt = await client.waitForTransactionReceipt({ hash: txHash, confirmations: 1, timeout: 60_000 });
-  if (receipt.status !== "success") throw new ApiError(409, "The USDC transaction failed");
+  if (receipt.status !== "success") throw new ApiError(409, "This payment didn't go through");
 
   const expected = parseUnits(amountUsdc, 6);
   const matched = receipt.logs.some((log) => {

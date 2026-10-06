@@ -9,20 +9,24 @@ import {
   getGroupById,
   migrateLocalStorageData,
   getTransactionsByWallet,
-  fundDemoWallet,
+  getRequestsByWallet,
+  getSavedProfile,
   getNotifications,
   markNotificationsRead,
 } from "@/lib/db";
-import { Group, Transaction, Notification } from "@/lib/types";
+import { Group, Transaction, Notification, MoneyRequest, ProfileInput } from "@/lib/types";
 import { formatNgn, usdcToNgn } from "@/lib/currency";
+import { DEMO_FUNDS_ENABLED, useDemoFunds } from "@/lib/useDemoFunds";
 import { CreateGroupModal } from "./CreateGroupModal";
 import { JoinGroupModal } from "./JoinGroupModal";
 import { GroupCard } from "./GroupCard";
 import { GroupDetail, GroupAction, ActivityList, buildActivity } from "./GroupDetail";
 import { DemoBanner } from "./DemoBanner";
+import { ProfileModal } from "./ProfileModal";
 import { Avatar, friendlyFromEmail, memberName } from "./ui/Avatar";
 import { IconButton } from "./ui/Sheet";
 import { useCountUp } from "./ui/Status";
+import { StartAction, StartStep } from "./ui/StartSteps";
 import {
   BoltIcon,
   HomeIcon,
@@ -83,7 +87,7 @@ export function LoginGate({ onLogin }: { onLogin: () => void }) {
               Family money, <span className="text-primary-600">finally simple.</span>
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-ink-muted sm:text-lg">
-              One shared wallet for the people you trust. Send, request and settle up in naira—without the crypto jargon.
+              One shared wallet for the people you trust. Send money home, share family costs and settle up, all in naira.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <button type="button" onClick={onLogin} className="focus-ring rounded-full bg-primary-500 px-7 py-4 font-display text-base font-bold text-ink shadow-glow active:scale-[0.98]">
@@ -150,8 +154,11 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [recent, setRecent] = useState<Transaction[]>([]);
+  const [requests, setRequests] = useState<MoneyRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [savedProfile, setSavedProfile] = useState<ProfileInput | null>(null);
 
   const walletAddress = user?.wallet?.address || "";
   const userEmail = user?.email?.address;
@@ -160,12 +167,14 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
   const loadGroups = useCallback(async () => {
     if (!walletAddress) return;
     try {
-      const [userGroups, txs] = await Promise.all([
+      const [userGroups, txs, reqs] = await Promise.all([
         getGroupsByWallet(walletAddress),
         getTransactionsByWallet(walletAddress).catch(() => [] as Transaction[]),
+        getRequestsByWallet(walletAddress).catch(() => [] as MoneyRequest[]),
       ]);
       setGroups(userGroups);
       setRecent(txs);
+      setRequests(reqs);
     } catch (error) {
       console.error("Failed to load groups:", error);
     }
@@ -184,6 +193,10 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
   useEffect(() => {
     if (!walletAddress) return;
     getNotifications().then(setNotifications).catch(() => undefined);
+  }, [walletAddress]);
+
+  useEffect(() => {
+    setSavedProfile(getSavedProfile(walletAddress));
   }, [walletAddress]);
 
   const openGroup = (group: Group, action: GroupAction | null = null) => {
@@ -211,6 +224,7 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
   const handleDemoCleared = () => {
     setGroups([]);
     setRecent([]);
+    setRequests([]);
     setSelectedGroup(null);
   };
 
@@ -222,16 +236,32 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
       setGroups((prev) => prev.map((g) => (g.id === refreshed.id ? refreshed : g)));
     }
     getTransactionsByWallet(walletAddress).then(setRecent).catch(() => undefined);
+    getRequestsByWallet(walletAddress).then(setRequests).catch(() => undefined);
   };
 
-  const me = groups
+  const myMemberships = groups
     .flatMap((g) => g.members)
-    .find((m) => m.walletAddress.toLowerCase() === walletAddress.toLowerCase());
-  const myName = me
-    ? memberName(me)
-    : userEmail
-      ? friendlyFromEmail(userEmail)
-      : userPhone || "there";
+    .filter((m) => m.walletAddress.toLowerCase() === walletAddress.toLowerCase());
+  // Prefer a membership that already has a name set
+  const me = myMemberships.find((m) => m.displayName) ?? myMemberships[0];
+  const profileName = me?.displayName || savedProfile?.displayName || undefined;
+  const myName = profileName
+    ? profileName
+    : me
+      ? memberName(me)
+      : userEmail
+        ? friendlyFromEmail(userEmail)
+        : userPhone || "there";
+
+  // Contact details used for new memberships and as the profile form's starting values
+  const profileEmail = me ? me.email || undefined : savedProfile?.email || userEmail;
+  const profilePhone = me ? me.phone || undefined : savedProfile?.phone || userPhone;
+
+  const handleProfileSaved = async (profile: ProfileInput) => {
+    setSavedProfile(profile);
+    await loadGroups();
+    if (selectedGroup) await handleRefreshGroup();
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-cream">
@@ -263,7 +293,15 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
                 </div>
               )}
             </div>
-            <Avatar name={myName} seed={walletAddress} size="sm" />
+            <button
+              type="button"
+              onClick={() => setShowProfile(true)}
+              aria-label="Edit your profile"
+              title="Your profile"
+              className="focus-ring rounded-full transition active:scale-95"
+            >
+              <Avatar name={myName} seed={walletAddress} size="sm" />
+            </button>
             <IconButton label="Sign out" onClick={onLogout}>
               <LogoutIcon size={18} />
             </IconButton>
@@ -277,14 +315,17 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
             <HomeView
               key="home"
               name={myName}
+              hasName={!!profileName}
               groups={groups}
               recent={recent}
+              requests={requests}
               walletAddress={walletAddress}
               userEmail={userEmail}
               userPhone={userPhone}
               onOpenGroup={openGroup}
               onCreateGroup={() => setShowCreateModal(true)}
               onJoinGroup={() => setShowJoinModal(true)}
+              onEditProfile={() => setShowProfile(true)}
               onDemoLoaded={handleDemoLoaded}
               onDemoCleared={handleDemoCleared}
               onRefresh={loadGroups}
@@ -345,8 +386,9 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
         onClose={() => setShowCreateModal(false)}
         onCreated={handleGroupCreated}
         walletAddress={walletAddress}
-        userEmail={userEmail}
-        userPhone={userPhone}
+        displayName={profileName}
+        userEmail={profileEmail}
+        userPhone={profilePhone}
       />
 
       <JoinGroupModal
@@ -354,8 +396,22 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
         onClose={() => setShowJoinModal(false)}
         onJoined={handleGroupJoined}
         walletAddress={walletAddress}
-        userEmail={userEmail}
-        userPhone={userPhone}
+        displayName={profileName}
+        userEmail={profileEmail}
+        userPhone={profilePhone}
+      />
+
+      <ProfileModal
+        isOpen={showProfile}
+        onClose={() => setShowProfile(false)}
+        onSaved={handleProfileSaved}
+        initial={{
+          displayName: profileName ?? "",
+          phone: profilePhone ?? "",
+          email: profileEmail ?? "",
+        }}
+        seed={walletAddress}
+        walletCount={groups.length}
       />
     </div>
   );
@@ -393,33 +449,38 @@ function TabButton({
 
 function HomeView({
   name,
+  hasName,
   groups,
   recent,
+  requests,
   walletAddress,
   userEmail,
   userPhone,
   onOpenGroup,
   onCreateGroup,
   onJoinGroup,
+  onEditProfile,
   onDemoLoaded,
   onDemoCleared,
   onRefresh,
 }: {
   name: string;
+  hasName: boolean;
   groups: Group[];
   recent: Transaction[];
+  requests: MoneyRequest[];
   walletAddress: string;
   userEmail?: string;
   userPhone?: string;
   onOpenGroup: (group: Group, action?: GroupAction | null) => void;
   onCreateGroup: () => void;
   onJoinGroup: () => void;
+  onEditProfile: () => void;
   onDemoLoaded: (group: Group) => void;
   onDemoCleared: () => void;
   onRefresh: () => Promise<void>;
 }) {
-  const [fundingState, setFundingState] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [fundingMessage, setFundingMessage] = useState("");
+  const demoFunds = useDemoFunds(onRefresh);
   const hasGroups = groups.length > 0;
   const myBalanceUsdc = groups.reduce((sum, g) => {
     const me = g.members.find((m) => m.walletAddress.toLowerCase() === walletAddress.toLowerCase());
@@ -431,7 +492,14 @@ function HomeView({
   const allMembers = groups.flatMap((g) => g.members);
   const nameFor = (address: string) =>
     memberName(allMembers.find((m) => m.walletAddress.toLowerCase() === address.toLowerCase()));
-  const activity = buildActivity(recent, [], nameFor, walletAddress);
+  const activity = buildActivity(recent, requests, nameFor, walletAddress);
+
+  // First-time / empty users get a getting-started checklist instead of an empty dashboard
+  const hasActivity = recent.length > 0 || requests.length > 0;
+  const familyGroup = groups.find((g) => g.members.length > 1);
+  const inviteGroup = groups.find((g) => g.members.length < 3);
+  const hasMoney = myBalanceUsdc > 0 || demoFunds.state === "success";
+  const showGettingStarted = !hasGroups || !hasActivity;
 
   const quickAll: Array<{ key: GroupAction; label: string; icon: React.ReactNode; style: string }> = [
     { key: "send", label: "Send", icon: <SendIcon size={24} />, style: "from-primary-400 to-primary-600 shadow-glow" },
@@ -442,20 +510,6 @@ function HomeView({
 
   // Only offer actions that will actually do something in the wallet they open
   const quick = quickAll.filter((a) => a.key !== "invite" || (primaryGroup && primaryGroup.members.length < 3));
-
-  const handleDemoFunding = async () => {
-    setFundingState("loading");
-    setFundingMessage("");
-    try {
-      const result = await fundDemoWallet();
-      setFundingState("success");
-      setFundingMessage(`${result.amountUsdc} demo USDC added`);
-      await onRefresh();
-    } catch (error) {
-      setFundingState("error");
-      setFundingMessage(error instanceof Error ? error.message : "Demo funding failed");
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -493,23 +547,26 @@ function HomeView({
               <BoltIcon size={12} className="text-primary-300" /> Protected
             </span>
           </div>
-          {process.env.NEXT_PUBLIC_ENABLE_TESTNET_FAUCET === "true" && (
+          {DEMO_FUNDS_ENABLED && (
             <div className="mt-4 border-t border-white/15 pt-4">
               <button
                 type="button"
-                onClick={handleDemoFunding}
-                disabled={fundingState === "loading" || fundingState === "success"}
+                onClick={demoFunds.claim}
+                disabled={demoFunds.busy || demoFunds.done}
                 className="focus-ring w-full rounded-xl bg-white/15 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {fundingState === "loading"
+                {demoFunds.busy
                   ? "Adding demo funds…"
-                  : fundingState === "success"
+                  : demoFunds.state === "success"
                     ? "Demo funds added"
-                    : "Get demo funds"}
+                    : demoFunds.state === "claimed"
+                      ? "Demo funds already added"
+                      : "Get demo funds"}
               </button>
-              {fundingMessage && (
-                <p className={`mt-2 text-center text-xs ${fundingState === "error" ? "text-coral-100" : "text-primary-100"}`} role="status">
-                  {fundingMessage}
+              {demoFunds.message && (
+                <p className={`mt-2 text-center text-xs ${demoFunds.state === "error" ? "text-coral-100" : "text-primary-100"}`} role="status">
+                  {demoFunds.message}
+                  {!hasGroups && demoFunds.state === "success" && " It shows up here once you start or join a family wallet."}
                 </p>
               )}
             </div>
@@ -542,7 +599,86 @@ function HomeView({
         </section>
       )}
 
-      {hasGroups ? (
+      {showGettingStarted && (
+        <section className="card animate-rise-in [animation-delay:200ms]">
+          <p className="eyebrow">Getting started</p>
+          <h2 className="mt-1 font-display text-xl font-bold text-ink">
+            {hasGroups ? "You're nearly set up" : "Let's get your family set up"}
+          </h2>
+          <p className="mt-0.5 text-sm text-ink-muted">
+            A few quick steps and your family can send, ask for and settle money together.
+          </p>
+          <ol className="mt-1 divide-y divide-ink/5">
+            <StartStep index={1} title="Add your name" body="So your family knows it's you." done={hasName}>
+              <StartAction onClick={onEditProfile}>Add your name</StartAction>
+            </StartStep>
+            <StartStep
+              index={2}
+              title="Bring your family in"
+              body={
+                hasGroups
+                  ? "Invite up to 2 people to your family wallet."
+                  : "Start a family wallet and invite up to 2 people, or join one with a code."
+              }
+              done={!!familyGroup}
+            >
+              {hasGroups ? (
+                inviteGroup && (
+                  <StartAction primary onClick={() => onOpenGroup(inviteGroup, "invite")}>
+                    Invite family
+                  </StartAction>
+                )
+              ) : (
+                <>
+                  <StartAction primary onClick={onCreateGroup}>
+                    Create wallet
+                  </StartAction>
+                  <StartAction onClick={onJoinGroup}>Join with code</StartAction>
+                </>
+              )}
+            </StartStep>
+            <StartStep
+              index={3}
+              title="Add some money"
+              body={
+                DEMO_FUNDS_ENABLED
+                  ? "Get demo funds to try things out. No rush, the button stays on your balance card."
+                  : "Top up your balance so you can send."
+              }
+              done={hasMoney}
+            >
+              {DEMO_FUNDS_ENABLED && !demoFunds.done && (
+                <StartAction onClick={demoFunds.claim} disabled={demoFunds.busy}>
+                  {demoFunds.busy ? "Adding demo funds…" : "Get demo funds"}
+                </StartAction>
+              )}
+            </StartStep>
+            <StartStep
+              index={4}
+              title="Send or ask for money"
+              body={
+                familyGroup
+                  ? "Send money to family, or ask for what you need."
+                  : "Once family has joined you can send and ask for money."
+              }
+              done={hasActivity}
+            >
+              {familyGroup && (
+                <>
+                  {myBalanceUsdc > 0 && (
+                    <StartAction primary onClick={() => onOpenGroup(familyGroup, "send")}>
+                      Send money
+                    </StartAction>
+                  )}
+                  <StartAction onClick={() => onOpenGroup(familyGroup, "request")}>Ask for money</StartAction>
+                </>
+              )}
+            </StartStep>
+          </ol>
+        </section>
+      )}
+
+      {hasGroups && (
         <section className="animate-rise-in [animation-delay:200ms]">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-xl font-bold text-ink">Family wallets</h2>
@@ -560,20 +696,12 @@ function HomeView({
             ))}
           </div>
         </section>
-      ) : (
-        <EmptyWallets onCreateGroup={onCreateGroup} onJoinGroup={onJoinGroup} />
       )}
 
-      {hasGroups && (
+      {hasGroups && activity.length > 0 && (
         <section className="card animate-rise-in [animation-delay:260ms]">
           <h2 className="mb-2 font-display text-lg font-bold text-ink">Recent activity</h2>
-          {activity.length > 0 ? (
-            <ActivityList items={activity} limit={5} />
-          ) : (
-            <p className="py-4 text-center text-sm text-ink-muted">
-              Nothing yet — send or request money to get things moving.
-            </p>
-          )}
+          <ActivityList items={activity} limit={5} />
         </section>
       )}
     </div>

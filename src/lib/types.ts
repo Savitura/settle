@@ -82,6 +82,19 @@ export interface CreateMoneyRequestInput {
   note?: string;
 }
 
+export interface EditMoneyRequestInput {
+  requestId: string;
+  toAddress: string;
+  amountNgn: string;
+  note?: string;
+}
+
+export interface ProfileInput {
+  displayName: string;
+  phone?: string | null;
+  email?: string | null;
+}
+
 export interface Transaction {
   id: string;
   groupId: string;

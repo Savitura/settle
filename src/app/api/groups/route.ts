@@ -4,6 +4,7 @@ import { eq, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db/connection";
 import { apiErrorResponse, authenticateRequest, sameAddress, ApiError } from "@/lib/server/auth";
 import { syncGroupBalances } from "@/lib/server/balances";
+import { cleanDisplayName, knownDisplayName } from "@/lib/server/profile";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -184,6 +185,7 @@ export async function POST(request: NextRequest) {
     const memberId = generateId();
     const inviteCode = await generateUniqueInviteCode(db);
     const now = new Date();
+    const creatorName = cleanDisplayName(creatorDisplayName) ?? (await knownDisplayName(db, creatorWalletAddress));
 
     await db.insert(schema.groups).values({
       id: groupId,
@@ -198,7 +200,7 @@ export async function POST(request: NextRequest) {
       id: memberId,
       groupId,
       walletAddress: creatorWalletAddress,
-      displayName: creatorDisplayName || null,
+      displayName: creatorName,
       email: creatorEmail || null,
       phone: creatorPhone || null,
       joinedAt: now,
@@ -218,7 +220,7 @@ export async function POST(request: NextRequest) {
           {
             id: memberId,
             walletAddress: creatorWalletAddress,
-            displayName: creatorDisplayName || null,
+            displayName: creatorName,
             email: creatorEmail || null,
             phone: creatorPhone || null,
             joinedAt: now.toISOString(),

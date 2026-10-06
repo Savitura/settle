@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db/connection";
 import { apiErrorResponse, authenticateRequest } from "@/lib/server/auth";
+import { cleanDisplayName, knownDisplayName } from "@/lib/server/profile";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -73,12 +74,13 @@ export async function POST(request: NextRequest) {
 
     const memberId = generateId();
     const now = new Date();
+    const memberName = cleanDisplayName(displayName) ?? (await knownDisplayName(db, walletAddress));
 
     await db.insert(schema.groupMembers).values({
       id: memberId,
       groupId: group.id,
       walletAddress,
-      displayName: displayName || null,
+      displayName: memberName,
       email: email || null,
       phone: phone || null,
       joinedAt: now,
@@ -90,7 +92,7 @@ export async function POST(request: NextRequest) {
       id: memberId,
       groupId: group.id,
       walletAddress,
-      displayName: displayName || null,
+      displayName: memberName,
       email: email || null,
       phone: phone || null,
       joinedAt: now,

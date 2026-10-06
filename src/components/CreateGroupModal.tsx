@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { createGroup } from "@/lib/db";
+import { createGroup, getSavedProfile } from "@/lib/db";
 import { Group } from "@/lib/types";
 import { Sheet, SheetHeader } from "./ui/Sheet";
 
@@ -11,6 +11,8 @@ interface CreateGroupModalProps {
   onClose: () => void;
   onCreated: (group: Group) => void;
   walletAddress: string;
+  /** Name from the user's profile; falls back to the one saved on this device. */
+  displayName?: string;
   userEmail?: string;
   userPhone?: string;
 }
@@ -20,6 +22,7 @@ export function CreateGroupModal({
   onClose,
   onCreated,
   walletAddress,
+  displayName,
   userEmail,
   userPhone,
 }: CreateGroupModalProps) {
@@ -38,7 +41,7 @@ export function CreateGroupModal({
       const group = await createGroup(
         name.trim(),
         walletAddress,
-        undefined,
+        displayName || getSavedProfile(walletAddress)?.displayName || undefined,
         userEmail,
         userPhone
       );
