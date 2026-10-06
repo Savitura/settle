@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 
 import {
@@ -46,15 +47,19 @@ export function LoadingScreen() {
   );
 }
 
+// Square Up horizontal logo (light variant, for cream/white backgrounds). viewBox is 683x185.
 function Logo({ size = "md" }: { size?: "md" | "lg" }) {
-  const box = size === "lg" ? "h-14 w-14 rounded-[18px] text-3xl" : "h-9 w-9 rounded-xl text-lg";
+  const height = size === "lg" ? 40 : 30;
   return (
-    <span
-      aria-hidden="true"
-      className={`inline-flex items-center justify-center bg-ink font-display font-extrabold text-primary-400 shadow-card ${box}`}
-    >
-      ₦
-    </span>
+    <Image
+      src="/brand/settle-logo-light.svg"
+      alt="Settle"
+      width={Math.round((height * 683) / 185)}
+      height={height}
+      priority
+      unoptimized
+      style={{ height, width: "auto" }}
+    />
   );
 }
 
@@ -65,7 +70,6 @@ export function LoginGate({ onLogin }: { onLogin: () => void }) {
         <div className="flex items-center justify-between px-2 py-2">
           <div className="flex items-center gap-2.5">
           <Logo />
-          <span className="font-display text-xl font-bold">Settle</span>
           </div>
           <span className="hidden text-sm font-semibold text-ink-muted sm:block">Built for Nigerian families</span>
         </div>
@@ -235,7 +239,6 @@ export function AppShell({ user, onLogout }: { user: ShellUser | null; onLogout:
         <div className="mx-auto flex max-w-lg items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Logo />
-            <span className="font-display text-xl font-bold text-ink">Settle</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="relative">
