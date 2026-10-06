@@ -5,8 +5,10 @@ import {
   CreateTransactionRequest,
   MoneyRequest,
   CreateMoneyRequestInput,
+  EditMoneyRequestInput,
   MoneyRequestStatus,
   Notification,
+  ProfileInput,
 } from "./types";
 import { getAccessToken } from "@privy-io/react-auth";
 
@@ -14,6 +16,7 @@ const GROUPS_STORAGE_KEY = "settle_groups";
 const TRANSACTIONS_STORAGE_KEY = "settle_transactions";
 const REQUESTS_STORAGE_KEY = "settle_requests";
 const MIGRATION_DONE_KEY = "settle_migration_done";
+const PROFILE_STORAGE_KEY = "settle_profile";
 
 function getBaseUrl(): string {
   if (typeof window !== "undefined") {
@@ -61,8 +64,51 @@ export async function fundDemoWallet(): Promise<{ amountUsdc: string; txHash: st
   return fetchApi<{ amountUsdc: string; txHash: string }>("/api/faucet", { method: "POST" });
 }
 
-export async function manageGroup(input: { action: "rotate_invite" | "remove_member" | "leave"; groupId: string; memberId?: string }) {
-  return fetchApi<{ success?: boolean; inviteCode?: string }>("/api/groups/manage", { method: "POST", body: JSON.stringify(input) });
+export async function manageGroup(input: {
+  action: "rotate_invite" | "remove_member" | "leave" | "rename";
+  groupId: string;
+  memberId?: string;
+  name?: string;
+}) {
+  return fetchApi<{ success?: boolean; inviteCode?: string; name?: string }>("/api/groups/manage", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Updates your name and contact details on every family wallet you belong to. */
+export async function updateProfile(input: ProfileInput): Promise<{ profile: ProfileInput; updated: number }> {
+  return fetchApi<{ profile: ProfileInput; updated: number }>("/api/profile", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * Last profile saved on this device for this wallet, used when starting or joining a wallet
+ * before any membership exists. Keyed by wallet so a shared phone doesn't mix people up.
+ */
+export function getSavedProfile(walletAddress: string): ProfileInput | null {
+  if (typeof window === "undefined" || !walletAddress) return null;
+  try {
+    const raw = localStorage.getItem(`${PROFILE_STORAGE_KEY}:${walletAddress.toLowerCase()}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ProfileInput>;
+    if (!parsed || typeof parsed.displayName !== "string") return null;
+    return {
+      displayName: parsed.displayName,
+      phone: typeof parsed.phone === "string" ? parsed.phone : null,
+      email: typeof parsed.email === "string" ? parsed.email : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveProfileLocally(walletAddress: string, profile: ProfileInput): void {
+  if (typeof window === "undefined" || !walletAddress) return;
+  try {
+    localStorage.setItem(`${PROFILE_STORAGE_KEY}:${walletAddress.toLowerCase()}`, JSON.stringify(profile));
+  } catch {
+    // Storage can be unavailable (private mode); the server copy is the source of truth.
+  }
 }
 
 export async function getNotifications(): Promise<Notification[]> {
@@ -265,6 +311,24 @@ export async function createMoneyRequest(input: CreateMoneyRequestInput): Promis
   const result = await fetchApi<{ request: MoneyRequest }>("/api/requests", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+  return result.request;
+}
+
+/** Change the amount, note or person on a request you made. Only works while it's still unpaid. */
+export async function editMoneyRequest(input: EditMoneyRequestInput): Promise<MoneyRequest> {
+  const result = await fetchApi<{ request: MoneyRequest }>("/api/requests", {
+    method: "PATCH",
+    body: JSON.stringify({ action: "edit", ...input }),
+  });
+  return result.request;
+}
+
+/** Cancel a request you made. Unlike updateRequestStatus, errors are thrown so the UI can show them. */
+export async function cancelMoneyRequest(requestId: string): Promise<MoneyRequest | null> {
+  const result = await fetchApi<{ request: MoneyRequest | null }>("/api/requests", {
+    method: "PATCH",
+    body: JSON.stringify({ requestId, status: "cancelled" }),
   });
   return result.request;
 }
